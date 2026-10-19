@@ -149,8 +149,8 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §7.4 | Never charge if the purchase can't complete | ✅ | All checks run before `Wallet.spend`. Test: "rejects … without changes" |
 | §7.4 | Never grant twice for a repeated request | 🟠 | Client drops concurrent duplicates (`Lib/Request`), plus a server rate limit. No server-side transaction id (C16) |
 | §7.5 | Opening sequence: pack centred, blur, pack animation, open with particles and sound, card flip, rarity effects, name and income reveal | 🟡 | `UI/PackReveal` (A7): blur, centred pack art that shakes by rarest content, flash and burst, five cards flipped one by one with rarity-scaled effects (`Logic/RevealStyle`), name, rarity, income and variant bonus. **No sound** (no audio asset ids exist; none invented). Not yet verified in Studio |
-| §7.5 | Open several packs in succession; clean results screen | 🟡 | One pack per OPEN, each ending on a five-card summary; open the next one from the shop. No chained multi-pack sequence |
-| §7.5 | Option to reduce or skip repeated animations | 🟡 | SKIP button jumps to the summary; Reduced Motion shows the summary straight away. No separate `SkipAnimations` setting |
+| §7.5 | Open several packs in succession; clean results screen | 🟡 | 1 pack, or 3 / 6 packs at once (Multi Opening Developer Products): all packs in one scene, one card per pack revealed per click, summary of 5 / 15 / 30 cards |
+| §7.5 | Option to reduce or skip repeated animations | 🟡 | Reveal is manual by owner decision (no timers). SKIP TO SUMMARY at any time; Reduced Motion removes shakes, flashes and sparkles |
 | §7.5 | Reward granted by the server before the client shows the result | ✅ | `OpenPack` consumes the pack and adds the cards before replying; the reveal is visual only. Idempotent per request id (`Lib/PackOpenRequests`), so repeated clicks can't grant twice |
 | §3/§7 | Owned, unopened packs (starter packs; packs as rewards in §13 and §17) | ✅ | Pack inventory `Packs`; `BuyPack` adds packs, `OpenPack` opens them (5 cards each, decision Q2); `PackShop.grant` for rewards. Tests: `Gameplay.spec` |
 

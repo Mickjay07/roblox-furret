@@ -16,6 +16,7 @@ local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
+local Coalesce = require(script.Parent.Parent.Lib.Coalesce)
 local Request = require(script.Parent.Parent.Lib.Request)
 local DataController = require(script.Parent.DataController)
 local BackpackController = require(script.Parent.BackpackController)
@@ -185,10 +186,12 @@ function DisplayController:Start()
 			updatePending()
 		end
 	end)
+	-- Once per frame: a pack opening sends Cards and Discovered back to back.
+	local scheduleRender = Coalesce(render)
 	for _, key in { "Display", "Cards", "Upgrades", "Discovered" } do
 		DataController.Changed:Connect(function(changed)
 			if changed == key or changed == "*" then
-				render()
+				scheduleRender()
 			end
 		end)
 	end

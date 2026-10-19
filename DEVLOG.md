@@ -3,6 +3,76 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Manual pack opening, card back, 3x/6x Multi Opening, image loading
+
+**A. Image loading: findings first (code inspection; no Studio measurements yet)**
+- **No preloading:** every 683×1024 card image downloaded the first time it was shown
+  (backpack, reveal, stands), so it popped in.
+- **Full-size images in small tiles:** the backpack, binder and summary tiles (~150–200 px)
+  downloaded the full image.
+- **Repeated rebuilds:** windows rebuild every tile on a data change, and one pack opening
+  replicates several keys back to back, so My Stands rebuilt twice (Cards, then Discovered).
+  Rebuilds were already limited to open windows and never ran on the 1 s income tick.
+
+**Changes:**
+- `Lib/ImagePreloader` preloads every uploaded image at startup and the opened cards' art
+  during the pack animation. In Studio it logs per-image and per-batch times, which are the
+  evidence for any speed claim.
+- `Lib/Coalesce`: Backpack and My Stands re-render at most once per frame.
+- The reveal reuses one ImageLabel per column, switching back ↔ front.
+- `CardArt.thumbnail` lets tiles use a 256×384 thumbnail once one is uploaded. The script
+  now writes them: measured 180–219 KB vs 1.0–1.2 MB, 7× fewer pixels.
+- Asset ids unchanged; the processed full images are byte-identical (checked with sha256).
+
+**B. Shared card back:** `card.back` = 129297477524368 (`rbxassetid://` via `CardArt.back()`).
+Fronts unchanged.
+
+**C. Manual opening:** `UI/PackReveal` rewritten around `Logic/RevealPlan`, a pure state
+machine (intro → hidden → revealed → … → summary) that only moves on clicks.
+- CLICK TO REVEAL (or a click on the card) flips; NEXT CARD is required each round.
+- No timers anywhere; out-of-state clicks are ignored.
+- The summary has CLAIM ALL, and SKIP TO SUMMARY is available.
+
+**D. Multi Opening Developer Products** (3x 2038324873, 6x 2039938706)
+- **Product type:** the cloud can't reach roblox.com, so the type and price couldn't be
+  verified here. `MonetizationService` checks each id at start with
+  `GetProductInfo(Enum.InfoType.Product)` and logs its name and Robux price. If the lookup
+  fails, it probes `InfoType.GamePass` and says so, and the option is disabled. Prices come
+  from the website only; the design's 100 Robux is compared and a mismatch is logged.
+- **Receipts:** this is the first and only `ProcessReceipt` handler (none existed). The
+  receipt and entitlement are recorded (`Purchases.Entitlements`, additive schema field)
+  and saved before PurchaseGranted.
+  - A duplicate PurchaseId grants nothing.
+  - A failed save is reverted and returns NotProcessedYet.
+  - Unknown products return NotProcessedYet.
+  - Concurrent receipts are guarded per PurchaseId.
+  - The newest 200 receipt ids are kept.
+- **Prerequisite:** `PromptMultiOpen` is checked on the server (6x requires 3x; an owned
+  unlock is never re-offered). A 6x receipt bought outside the UI is recorded (it was paid
+  for) but 6x stays unusable until 3x is owned (`Logic/Entitlements`).
+- Removed the unused placeholder game pass "TripleOpen" (id 0).
+
+**E. Simultaneous multi opening:** `OpenPack(packId, requestId, packs)` with packs ∈
+{1, 3, 6}.
+- The server checks the unlock and the owned pack count, then consumes exactly that many
+  packs: 5, 15 or 30 cards, each tagged with Pack/Slot.
+- The scene shows one column per pack. All packs animate together, each click reveals card
+  k of every pack, and no pack finishes first. The summary shows every card.
+- Layout scales for 6 columns on phones (autoScale, compact labels).
+
+**F. Tests:** new `tests/unit/MultiOpening.spec.luau` (32 tests):
+- the card-back mapping and thumbnail fallback;
+- prerequisites and purchase offers; schema reconcile;
+- receipts: grant, duplicate, unknown, missing prerequisite, revert, pruning, product-info
+  check;
+- 1/3/6 openings with reward counts 5/15/30, rejections without the unlock or enough packs,
+  and duplicate requests;
+- RevealPlan's manual and synchronised progression (1 card per click, 3, 6; 5 clicks).
+
+ConfigCheck now validates MultiOpen and thumbnail ids. `SKIP_SELENE_IF_OFFLINE=1
+./scripts/check.sh`: all checks passed, 248 tests. **Not run in Studio:** TESTING.md
+§1.13–1.16.
+
 ## 2026-10-19: A7 pack opening sequence; owner decisions on Shiny sale, Q14, Q15
 
 **Owner decisions**

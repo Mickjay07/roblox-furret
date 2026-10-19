@@ -121,7 +121,9 @@ export type PlayerData = {
 	Progression: { Level: number, Xp: number },
 	Stats: { [string]: number },
 	Flags: { [string]: boolean },
-	Purchases: { Receipts: { [string]: number } },
+	-- Receipts: processed Developer Product PurchaseId -> Unix time (idempotency).
+	-- Entitlements: one-time unlocks bought with Developer Products (e.g. MultiOpen3).
+	Purchases: { Receipts: { [string]: number }, Entitlements: { [string]: boolean } },
 }
 
 return {}

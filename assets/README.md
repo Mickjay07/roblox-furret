@@ -93,6 +93,26 @@ Alternative: upload through the Creator Dashboard under *Development Items → D
 that case, use the **image** id, not the decal id. In Studio, insert the decal and copy the
 `Texture` property's number, because a decal id doesn't work as an image.
 
+## Shared card back
+
+`card.back` in `Config/Assets.luau` (asset id 129297477524368) was uploaded to Roblox
+directly by the owner; its source file isn't in the repository. The pack opening shows it
+for every unrevealed card. If it's ever set to 0, a drawn back is shown instead.
+
+## Thumbnails for small tiles (optional upload)
+
+`process_card_art.py` also writes `assets/processed/pack1/thumbs/card_00N_<name>.png`
+(256×384). The backpack, binder and pack summary show cards at ~150–200 px, so these are
+enough there. Measured on the Pack 1 files: 180–219 KB per thumbnail versus 1.0–1.2 MB for
+the full image (about 5.5× smaller), with 7× fewer pixels (98,304 vs 699,392), so 7× less
+texture memory per tile.
+
+Until a thumbnail is uploaded, tiles use the full image (`ThumbAssetId` absent or 0). To
+enable them: upload the six files from `thumbs/` the same way as above, then add
+`entry.ThumbAssetId = <id>` for each card entry in `Config/Assets.luau` (for example right
+after the `Images` table: `Images["card.pack1.sandy"].ThumbAssetId = 123`). The 3D stands
+and the large reveal keep using the full image.
+
 ## Adding art for a new card or pack
 
 1. Put the original file under `assets/source/<Set name>/`.

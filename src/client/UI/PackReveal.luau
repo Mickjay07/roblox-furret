@@ -1,18 +1,19 @@
 --!strict
--- Pack opening sequence (spec §7.5, roadmap A7). Purely visual: the server has already
--- consumed the pack and added the cards before this plays, so closing it, skipping it or
--- disconnecting never loses or duplicates a reward.
+-- Pack opening scene (spec §7.5, roadmap A7). Purely visual: the server has already
+-- consumed the packs and added every card before this plays, so closing it, skipping it
+-- or disconnecting never loses or duplicates a reward.
 --
---   1. The pack appears in the centre over a blurred, dimmed world and shakes (harder when
---      a rarer card is inside), then bursts open with a flash.
---   2. The five cards are revealed one by one: card back, flip, then rarity effects
---      (Logic/RevealStyle: glow, sparkles, rotating rays, flash and banner for the rarest)
---      with the card's name, rarity, income and variant bonus ("SHINY +2%").
---   3. A summary of all five cards with a CONTINUE button.
+-- One scene for 1, 3 or 6 packs opened together (Multi Opening), laid out as columns:
+--   1. All packs appear side by side over a blurred world, shake together (harder when a
+--      rarer card is inside), then burst open; each column shows the shared card back.
+--   2. Manual reveal (Logic/RevealPlan, no timers): CLICK TO REVEAL (or click a card)
+--      flips card k of EVERY pack at once - 1, 3 or 6 cards - with rarity effects
+--      (Logic/RevealStyle) and each card's name, rarity, income and variant bonus.
+--      NEXT CARD turns the next round face down. No pack is finished before the others.
+--   3. After round 5 (or SKIP TO SUMMARY): every card - 5, 15 or 30 - and CLAIM ALL.
 --
--- Tap anywhere to advance; SKIP jumps to the summary. With Reduced Motion on, the summary
--- shows straight away. Each play() starts a new session; anything still running from an
--- older session checks the session number and stops, so closing mid-animation is safe.
+-- Image instances are reused: each column keeps one ImageLabel and only its Image switches
+-- between the card back and the front. The cards' images are preloaded during step 1.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -24,9 +25,11 @@ local Config = require(Shared.Config)
 local Types = require(Shared.Types)
 local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
+local RevealPlan = require(Shared.Logic.RevealPlan)
 local RevealStyle = require(Shared.Logic.RevealStyle)
 local Format = require(Shared.Util.Format)
 
+local ImagePreloader = require(script.Parent.Parent.Lib.ImagePreloader)
 local CardTile = require(script.Parent.CardTile)
 local Components = require(script.Parent.Components)
 local Create = require(script.Parent.Create)
@@ -39,60 +42,92 @@ export type RevealCard = {
 	IsNew: boolean,
 	OneIn: number,
 	Income: number,
+	Pack: number?,
+	Slot: number?,
 }
+
+type Column = {
+	frame: Frame,
+	flipper: Frame,
+	face: ImageLabel,
+	drawnBack: Frame,
+	tileHolder: Frame,
+	glow: Frame,
+	pop: UIScale,
+	labels: { TextLabel },
+}
+
+type Layout = { cardWidth: number, gap: number, infoHeights: { number }, useThumb: boolean }
 
 local PackReveal = {}
 
-local CARD_SIZE = Vector2.new(280, 420)
+local ROOT_SIZE = Vector2.new(1100, 760)
+local MAX_SPARKS = 36
 
 local gui: ScreenGui? = nil
-local root: Frame
 local stage: Frame
 local flash: Frame
-local hint: TextLabel
 local skipButton: TextButton
+local actionButton: TextButton
+local cardCatcher: TextButton
 local blur: BlurEffect? = nil
 local session = 0
-local advanceRequested = false
-local skipRequested = false
+local busy = false
 local onClosed: (() -> ())? = nil
+
+-- Current opening.
+local plan: RevealPlan.Plan? = nil
+local currentCards: { RevealCard } = {}
+local columns: { Column } = {}
+local layout: Layout
+local effects: { Instance } = {}
+local roundLabel: TextLabel? = nil
+
+local function layoutFor(packs: number): Layout
+	if packs >= 6 then
+		return { cardWidth = 158, gap = 12, infoHeights = { 22, 17, 20, 16 }, useThumb = true }
+	elseif packs >= 3 then
+		return { cardWidth = 226, gap = 18, infoHeights = { 28, 20, 24, 18 }, useThumb = false }
+	end
+	return { cardWidth = 280, gap = 0, infoHeights = { 36, 26, 30, 22 }, useThumb = false }
+end
 
 local function alive(token: number): boolean
 	return token == session
-end
-
--- Waits up to `seconds`; returns early when the player taps. False if the session ended.
-local function hold(token: number, seconds: number, tapToAdvance: boolean): boolean
-	advanceRequested = false
-	local elapsed = 0
-	while elapsed < seconds do
-		if not alive(token) or skipRequested then
-			return false
-		end
-		if tapToAdvance and advanceRequested then
-			break
-		end
-		elapsed += task.wait(0.03)
-	end
-	return alive(token) and not skipRequested
 end
 
 local function play(instance: Instance, seconds: number, goal: { [string]: any }, style: Enum.EasingStyle?)
 	TweenService:Create(instance, TweenInfo.new(seconds, style or Enum.EasingStyle.Quad), goal):Play()
 end
 
+local function clearEffects()
+	for _, effect in effects do
+		effect:Destroy()
+	end
+	table.clear(effects)
+end
+
 local function clearStage()
+	clearEffects()
+	table.clear(columns)
+	roundLabel = nil
 	for _, child in stage:GetChildren() do
 		child:Destroy()
 	end
 end
 
 local function doFlash(strength: number)
+	if Components.reducedMotion then
+		return
+	end
 	flash.BackgroundTransparency = 1 - strength
 	play(flash, 0.45, { BackgroundTransparency = 1 })
 end
 
 local function shakeStage(token: number, intensity: number, times: number)
+	if Components.reducedMotion then
+		return
+	end
 	for i = 1, times do
 		if not alive(token) then
 			return
@@ -104,13 +139,16 @@ local function shakeStage(token: number, intensity: number, times: number)
 	stage.Position = UDim2.fromScale(0.5, 0.5)
 end
 
-local function burst(parent: Instance, color: Color3, count: number)
+local function burst(parent: GuiObject, color: Color3, count: number)
+	if Components.reducedMotion then
+		return
+	end
 	for _ = 1, count do
-		local size = math.random(10, 22)
+		local size = math.random(8, 18)
 		local spark = Create("Frame", {
 			Name = "Spark",
 			Size = UDim2.fromOffset(size, size),
-			Position = UDim2.fromScale(0.5, 0.45),
+			Position = UDim2.fromScale(0.5, 0.4),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Rotation = math.random(0, 90),
 			BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), math.random() * 0.5),
@@ -119,9 +157,9 @@ local function burst(parent: Instance, color: Color3, count: number)
 			Parent = parent,
 		}, { Components.corner(UDim.new(0.25, 0)) })
 		local angle = math.random() * math.pi * 2
-		local distance = math.random(180, 380)
+		local distance = math.random(120, 300)
 		play(spark, 0.9, {
-			Position = UDim2.new(0.5, math.cos(angle) * distance, 0.45, math.sin(angle) * distance),
+			Position = UDim2.new(0.5, math.cos(angle) * distance, 0.4, math.sin(angle) * distance),
 			BackgroundTransparency = 1,
 			Rotation = spark.Rotation + math.random(90, 360),
 		}, Enum.EasingStyle.Quart)
@@ -131,11 +169,11 @@ local function burst(parent: Instance, color: Color3, count: number)
 	end
 end
 
-local function rays(parent: Instance, color: Color3): Frame
+local function rays(parent: GuiObject, color: Color3, size: number): Frame
 	local holder = Create("Frame", {
 		Name = "Rays",
-		Size = UDim2.fromOffset(900, 900),
-		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(size, size),
+		Position = UDim2.fromScale(0.5, 0.4),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		ZIndex = 1,
@@ -143,12 +181,12 @@ local function rays(parent: Instance, color: Color3): Frame
 	})
 	for i = 0, 7 do
 		Create("Frame", {
-			Size = UDim2.new(0, 46, 1, 0),
+			Size = UDim2.new(0, size * 0.05, 1, 0),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Rotation = i * 22.5,
 			BackgroundColor3 = color,
-			BackgroundTransparency = 0.78,
+			BackgroundTransparency = 0.75,
 			BorderSizePixel = 0,
 			ZIndex = 1,
 			Parent = holder,
@@ -163,328 +201,506 @@ local function rays(parent: Instance, color: Color3): Frame
 			}),
 		})
 	end
-	-- Endless slow spin; destroying the frame stops the tween.
-	TweenService
-		:Create(holder, TweenInfo.new(8, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
-		:Play()
+	if not Components.reducedMotion then
+		-- Endless slow spin; destroying the frame stops the tween.
+		TweenService
+			:Create(holder, TweenInfo.new(8, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
+			:Play()
+	end
 	return holder
 end
 
--- The card face shown after the flip: the uploaded art stretched to the card frame (so
--- the flip squash reads correctly), or the standard placeholder tile.
-local function cardFace(def: Types.CardDef, card: RevealCard): GuiObject
-	local art = CardArt.forCard(def)
-	if art and Config.Assets.FullCardArt then
-		return Create("ImageLabel", {
-			Name = "Face",
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-			Image = art,
-			ScaleType = Enum.ScaleType.Stretch,
-			ZIndex = 4,
-		})
-	end
-	local tile = CardTile.new(def, { Variant = card.Variant, IsNew = card.IsNew, Income = card.Income })
-	tile.Size = UDim2.fromScale(1, 1)
-	tile.ZIndex = 4
-	return tile
-end
-
-local function cardBack(pack: Types.PackDef): Frame
-	local back = Create("Frame", {
-		Name = "Back",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = pack.Color,
-		ZIndex = 4,
-	}, {
-		Components.corner(UDim.new(0, 18)),
-		Components.stroke(Color3.new(1, 1, 1), 5),
-		Create("UIGradient", {
-			Rotation = 45,
-			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(110, 110, 120)),
-		}),
-	})
-	local mark = Components.label({ Text = "?", Size = UDim2.fromScale(0.5, 0.4), Parent = back })
-	mark.Position = UDim2.fromScale(0.5, 0.5)
-	mark.AnchorPoint = Vector2.new(0.5, 0.5)
-	mark.ZIndex = 5
-	return back
-end
-
-local function infoText(parent: Instance, text: string, y: number, height: number, color: Color3?): TextLabel
+local function stageLabel(text: string, y: number, height: number, color: Color3?): TextLabel
 	local label = Components.label({
 		Text = text,
-		Size = UDim2.new(0, 520, 0, height),
+		Size = UDim2.new(0, 700, 0, height),
 		Position = UDim2.new(0.5, 0, 0, y),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Color = color,
 		StrokeThickness = 3,
-		Parent = parent,
+		Parent = stage,
 	})
 	label.ZIndex = 6
-	label.TextTransparency = 1
-	play(label, 0.3, { TextTransparency = 0 })
 	return label
 end
 
--- 1. The pack in the centre: pop in, shake (more for rarer contents), burst open.
-local function introPack(token: number, pack: Types.PackDef, cards: { RevealCard }): boolean
-	local rarities = {}
-	for _, card in cards do
-		local def = CardRegistry.get(card.CardId)
-		if def then
-			table.insert(rarities, def.Rarity)
-		end
+local function frontImage(def: Types.CardDef): string?
+	if not Config.Assets.FullCardArt then
+		return nil
 	end
-	local tier = RevealStyle.packTier(rarities)
-
-	local holder = Create("Frame", {
-		Name = "Pack",
-		Size = UDim2.fromOffset(300, 450),
-		Position = UDim2.fromScale(0.5, 0.45),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		ZIndex = 3,
-		Parent = stage,
-	})
-	local scale = Create("UIScale", { Scale = 0, Parent = holder })
-	local art = CardArt.forPack(pack)
-	if art then
-		Create("ImageLabel", {
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-			Image = art,
-			ScaleType = Enum.ScaleType.Fit,
-			ZIndex = 3,
-			Parent = holder,
-		})
-	else
-		local badge = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromScale(1, 1))
-		badge.ZIndex = 3
-		badge.Parent = holder
-	end
-	local title = infoText(stage, string.upper(pack.DisplayName), 540, 46)
-
-	play(scale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
-	if not hold(token, 0.5, false) then
-		return false
-	end
-	-- Anticipation: the rarer the best card inside, the longer and harder the shake.
-	local shakes = 4 + tier * 3
-	for i = 1, shakes do
-		if not alive(token) or skipRequested then
-			return false
-		end
-		local angle = (if i % 2 == 0 then 1 else -1) * (3 + tier * 2) * (i / shakes)
-		play(holder, 0.06, { Rotation = angle })
-		task.wait(0.07)
-	end
-	holder.Rotation = 0
-	doFlash(if tier >= 4 then 0.9 else 0.6)
-	play(scale, 0.25, { Scale = 1.6 })
-	for _, child in holder:GetDescendants() do
-		if child:IsA("ImageLabel") then
-			play(child, 0.25, { ImageTransparency = 1 })
-		elseif child:IsA("Frame") then
-			play(child, 0.25, { BackgroundTransparency = 1 })
-		end
-	end
-	burst(stage, pack.Color, 16)
-	if not hold(token, 0.3, false) then
-		return false
-	end
-	holder:Destroy()
-	title:Destroy()
-	return true
+	return if layout.useThumb then CardArt.thumbnail(def.Artwork) else CardArt.forCard(def)
 end
 
--- 2. One card: back, flip, rarity effects and details.
-local function revealCard(token: number, pack: Types.PackDef, card: RevealCard, index: number, total: number): boolean
-	local def = CardRegistry.get(card.CardId)
-	if not def then
-		return true
+-- Builds one column per pack: card (one reusable ImageLabel), glow and info labels.
+local function buildColumns(packs: number)
+	local cardHeight = layout.cardWidth * 1.5
+	local infoHeight = 0
+	for _, height in layout.infoHeights do
+		infoHeight += height + 4
 	end
-	clearStage()
-	local rarity = Config.Rarities.ById[def.Rarity]
-	local color = if rarity then rarity.Color else Theme.Colors.Muted
-	local style = RevealStyle.forRarity(def.Rarity)
-
-	local counter = infoText(stage, `CARD {index} / {total}`, 0, 34, Theme.Colors.Muted)
-	counter.TextTransparency = 0
-
-	local flipper = Create("Frame", {
-		Name = "Flipper",
-		Size = UDim2.fromOffset(CARD_SIZE.X, CARD_SIZE.Y),
-		Position = UDim2.fromScale(0.5, 0.45),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		ZIndex = 4,
-		Parent = stage,
-	})
-	local pop = Create("UIScale", { Scale = 0.2, Parent = flipper })
-	local back = cardBack(pack)
-	back.Parent = flipper
-	play(pop, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-	if not hold(token, 0.45 + (style.Tier - 1) * 0.15, false) then
-		return false
-	end
-
-	-- Flip: squash the back to nothing, swap faces, unsquash the front.
-	play(flipper, 0.14, { Size = UDim2.fromOffset(0, CARD_SIZE.Y) }, Enum.EasingStyle.Quad)
-	task.wait(0.15)
-	if not alive(token) then
-		return false
-	end
-	back:Destroy()
-	cardFace(def, card).Parent = flipper
-	play(flipper, 0.18, { Size = UDim2.fromOffset(CARD_SIZE.X, CARD_SIZE.Y) }, Enum.EasingStyle.Back)
-
-	-- Rarity effects, bigger for rarer cards.
-	if style.Glow then
-		local glow = Create("Frame", {
-			Name = "Glow",
-			Size = UDim2.fromOffset(CARD_SIZE.X + 40, CARD_SIZE.Y + 40),
-			Position = UDim2.fromScale(0.5, 0.45),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = color,
-			BackgroundTransparency = 1,
-			ZIndex = 2,
-			Parent = stage,
-		}, { Components.corner(UDim.new(0, 30)) })
-		play(glow, 0.3, { BackgroundTransparency = 0.55 - style.Tier * 0.08 })
-	end
-	if style.Rays then
-		rays(stage, color)
-	end
-	if style.Burst > 0 then
-		burst(stage, color, style.Burst)
-	end
-	if style.Flash then
-		doFlash(0.85)
-		task.spawn(shakeStage, token, 12, 10)
-	end
-	play(pop, 0.12, { Scale = 1.08 })
-	task.delay(0.12, function()
-		if alive(token) then
-			play(pop, 0.2, { Scale = 1 })
-		end
-	end)
-
-	-- Details: name, rarity, income (server-computed) and variant bonus.
-	if style.Banner then
-		local banner = infoText(stage, style.Banner, 44, 54, color)
-		local bannerScale = Create("UIScale", { Scale = 0.3, Parent = banner })
-		play(bannerScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
-	end
-	infoText(stage, string.upper(def.Name), 562, 44)
-	infoText(stage, if rarity then rarity.DisplayName else def.Rarity, 606, 30, color)
-	local extra = {}
-	local variantLabel = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
-	if variantLabel then
-		table.insert(extra, variantLabel)
-	end
-	if card.IsNew then
-		table.insert(extra, "NEW!")
-	end
-	table.insert(extra, `1 IN {Format.commas(card.OneIn)}`)
-	infoText(stage, `+{Format.rate(card.Income)}/S`, 640, 34, Theme.Colors.Cash)
-	local variantDef = Config.Variants.ById[card.Variant]
-	infoText(
-		stage,
-		table.concat(extra, "   "),
-		678,
-		28,
-		if variantLabel and variantDef then variantDef.Color else Theme.Colors.Muted
-	)
-
-	hint.Visible = true
-	local continued = hold(token, style.Hold, true)
-	hint.Visible = false
-	return continued
-end
-
--- 3. All five cards with their details and CONTINUE.
-local function showSummary(cards: { RevealCard })
-	clearStage()
-	skipButton.Visible = false
-	hint.Visible = false
-	local title = infoText(stage, "PACK OPENED!", 0, 56)
-	title.TextTransparency = 0
 	local row = Create("Frame", {
-		Name = "Summary",
-		Size = UDim2.new(1, 0, 0, 470),
-		Position = UDim2.fromOffset(0, 80),
+		Name = "Columns",
+		Size = UDim2.new(1, 0, 0, cardHeight + infoHeight + 16),
+		Position = UDim2.new(0.5, 0, 0, if packs >= 6 then 150 else 110),
+		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
 		Parent = stage,
 	}, {
 		Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, 16),
+			Padding = UDim.new(0, layout.gap),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	for i, card in cards do
+	local backImage = CardArt.back()
+	for p = 1, packs do
+		local frame = Create("Frame", {
+			Name = "Pack" .. p,
+			Size = UDim2.fromOffset(layout.cardWidth, cardHeight + infoHeight + 16),
+			BackgroundTransparency = 1,
+			LayoutOrder = p,
+			Parent = row,
+		})
+		local glow = Create("Frame", {
+			Name = "Glow",
+			Size = UDim2.fromOffset(layout.cardWidth + 24, cardHeight + 24),
+			Position = UDim2.fromOffset(layout.cardWidth / 2, cardHeight / 2),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 2,
+			Parent = frame,
+		}, { Components.corner(UDim.new(0, 22)) })
+		local flipper = Create("Frame", {
+			Name = "Flipper",
+			Size = UDim2.fromOffset(layout.cardWidth, cardHeight),
+			Position = UDim2.fromOffset(layout.cardWidth / 2, cardHeight / 2),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 4,
+			Parent = frame,
+		})
+		local pop = Create("UIScale", { Scale = 1, Parent = flipper })
+		local face = Create("ImageLabel", {
+			Name = "Face",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Image = backImage or "",
+			ScaleType = Enum.ScaleType.Stretch,
+			ZIndex = 4,
+			Parent = flipper,
+		})
+		-- Drawn back, only when the card back image isn't uploaded.
+		local drawnBack = Create("Frame", {
+			Name = "DrawnBack",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(28, 70, 46),
+			Visible = backImage == nil,
+			ZIndex = 4,
+			Parent = flipper,
+		}, { Components.corner(UDim.new(0, 14)), Components.stroke(Color3.fromRGB(214, 180, 110), 4) })
+		local mark = Components.label({ Text = "?", Size = UDim2.fromScale(0.5, 0.3), Parent = drawnBack })
+		mark.Position = UDim2.fromScale(0.5, 0.5)
+		mark.AnchorPoint = Vector2.new(0.5, 0.5)
+		mark.ZIndex = 5
+		-- Holds a placeholder tile for fronts without uploaded art.
+		local tileHolder = Create("Frame", {
+			Name = "Tile",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ZIndex = 4,
+			Parent = flipper,
+		})
+		local labels = {}
+		local y = cardHeight + 12
+		for i, height in layout.infoHeights do
+			local label = Components.label({
+				Text = "",
+				Size = UDim2.new(1, 16, 0, height),
+				Position = UDim2.new(0.5, 0, 0, y),
+				AnchorPoint = Vector2.new(0.5, 0),
+				StrokeThickness = if i == 1 then 2.5 else 2,
+				Parent = frame,
+			})
+			label.ZIndex = 6
+			table.insert(labels, label)
+			y += height + 4
+		end
+		table.insert(columns, {
+			frame = frame,
+			flipper = flipper,
+			face = face,
+			drawnBack = drawnBack,
+			tileHolder = tileHolder,
+			glow = glow,
+			pop = pop,
+			labels = labels,
+		})
+	end
+end
+
+local function showBack(column: Column)
+	local backImage = CardArt.back()
+	column.face.Image = backImage or ""
+	column.face.Visible = true
+	column.drawnBack.Visible = backImage == nil
+	column.tileHolder:ClearAllChildren()
+	column.glow.BackgroundTransparency = 1
+	for _, label in column.labels do
+		label.Text = ""
+	end
+end
+
+local function showFront(column: Column, card: RevealCard, def: Types.CardDef)
+	column.drawnBack.Visible = false
+	local image = frontImage(def)
+	if image then
+		column.face.Image = image
+		column.face.Visible = true
+	else
+		column.face.Visible = false
+		local tile = CardTile.new(def, { Variant = card.Variant, IsNew = card.IsNew, Income = card.Income })
+		tile.Size = UDim2.fromScale(1, 1)
+		tile.ZIndex = 4
+		tile.Parent = column.tileHolder
+	end
+end
+
+local function fillLabels(column: Column, card: RevealCard, def: Types.CardDef)
+	local rarity = Config.Rarities.ById[def.Rarity]
+	local variantLabel = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
+	local variantDef = Config.Variants.ById[card.Variant]
+	local extra = variantLabel or (if card.IsNew then "NEW!" else `1 IN {Format.commas(card.OneIn)}`)
+	local texts: { { text: string, color: Color3 } } = {
+		{ text = string.upper(def.Name), color = Theme.Colors.Text },
+		{
+			text = if rarity then rarity.DisplayName else def.Rarity,
+			color = if rarity then rarity.Color else Theme.Colors.Muted,
+		},
+		{ text = `+{Format.rate(card.Income)}/S`, color = Theme.Colors.Cash },
+		{
+			text = extra,
+			color = if variantLabel and variantDef then variantDef.Color else Theme.Colors.Muted,
+		},
+	}
+	for i, label in column.labels do
+		local entry = texts[i]
+		label.Text = if entry then entry.text else ""
+		label.TextColor3 = if entry then entry.color else Theme.Colors.Text
+		label.TextTransparency = 1
+		play(label, 0.25, { TextTransparency = 0 })
+	end
+end
+
+local function setAction(text: string?, style: string?)
+	if text then
+		Components.setButtonText(actionButton, text)
+		Components.setButtonStyle(actionButton, style or "Orange")
+		actionButton.Visible = true
+	else
+		actionButton.Visible = false
+	end
+end
+
+local function updateRoundLabel()
+	local current = plan
+	if roundLabel and current then
+		local packs = current.packs
+		roundLabel.Text = if packs > 1
+			then `CARD {current.round} / {#current.rounds}  ·  {packs} PACKS`
+			else `CARD {current.round} / {#current.rounds}`
+	end
+end
+
+-- Turns the current round face down and waits for CLICK TO REVEAL.
+local function presentHidden()
+	clearEffects()
+	for _, column in columns do
+		showBack(column)
+		column.pop.Scale = 0.85
+		Components.tween(column.pop, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+	updateRoundLabel()
+	setAction("CLICK TO REVEAL", "Orange")
+	cardCatcher.Visible = true
+end
+
+local showSummary: () -> ()
+
+-- Flips every column at once and plays the rarity effects of this round.
+local function revealRound(token: number)
+	local current = plan
+	if not current or busy or not RevealPlan.reveal(current) then
+		return
+	end
+	busy = true
+	setAction(nil)
+	cardCatcher.Visible = false
+	local round = RevealPlan.current(current)
+	local cardHeight = layout.cardWidth * 1.5
+
+	-- Flip: squash, swap faces, unsquash - all columns together.
+	for _, column in columns do
+		play(column.flipper, 0.14, { Size = UDim2.fromOffset(0, cardHeight) })
+	end
+	task.wait(if Components.reducedMotion then 0 else 0.15)
+	if not alive(token) then
+		return
+	end
+	local bestTier, bestIndex = 0, 1
+	for i, column in columns do
+		local card = round[i] :: RevealCard?
+		local def = if card then CardRegistry.get(card.CardId) else nil
+		if card and def then
+			showFront(column, card, def)
+			fillLabels(column, card, def)
+			local style = RevealStyle.forRarity(def.Rarity)
+			local rarity = Config.Rarities.ById[def.Rarity]
+			local color = if rarity then rarity.Color else Theme.Colors.Muted
+			column.glow.BackgroundColor3 = color
+			play(column.glow, 0.3, { BackgroundTransparency = 0.6 - style.Tier * 0.08 })
+			burst(column.frame, color, math.min(style.Burst, MAX_SPARKS // #columns))
+			if style.Tier > bestTier then
+				bestTier, bestIndex = style.Tier, i
+			end
+			column.pop.Scale = 1.08
+			Components.tween(column.pop, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		else
+			column.face.Visible = false
+		end
+		play(column.flipper, 0.18, { Size = UDim2.fromOffset(layout.cardWidth, cardHeight) }, Enum.EasingStyle.Back)
+	end
+
+	-- Round-wide effects follow the rarest card of the round.
+	local bestCard = round[bestIndex] :: RevealCard?
+	local bestDef = if bestCard then CardRegistry.get(bestCard.CardId) else nil
+	if bestDef then
+		local style = RevealStyle.forRarity(bestDef.Rarity)
+		local rarity = Config.Rarities.ById[bestDef.Rarity]
+		local color = if rarity then rarity.Color else Theme.Colors.Muted
+		if style.Rays and columns[bestIndex] then
+			table.insert(effects, rays(columns[bestIndex].frame, color, layout.cardWidth * 2.6))
+		end
+		if style.Banner then
+			local banner = stageLabel(style.Banner, 52, 50, color)
+			table.insert(effects, banner)
+			local scale = Create("UIScale", { Scale = 0.3, Parent = banner })
+			Components.tween(scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+		end
+		if style.Flash then
+			doFlash(0.85)
+			task.spawn(shakeStage, token, 12, 10)
+		end
+	end
+	task.wait(if Components.reducedMotion then 0 else 0.35)
+	if not alive(token) then
+		return
+	end
+	busy = false
+	setAction(if RevealPlan.isLast(current) then "SEE ALL CARDS" else "NEXT CARD", "Green")
+end
+
+local function nextRound()
+	local current = plan
+	if not current or busy or not RevealPlan.next(current) then
+		return
+	end
+	if current.phase == "summary" then
+		showSummary()
+	else
+		presentHidden()
+	end
+end
+
+local function onAction()
+	local current = plan
+	if not current then
+		return
+	end
+	if current.phase == "hidden" then
+		revealRound(session)
+	elseif current.phase == "revealed" then
+		nextRound()
+	end
+end
+
+-- True while the intro of this session is still running (not closed, not skipped).
+local function introRunning(token: number): boolean
+	local current = plan
+	return alive(token) and current ~= nil and current.phase == "intro"
+end
+
+-- 1. Packs side by side: pop in, shake together, burst; then the card backs.
+local function intro(token: number, pack: Types.PackDef, packs: number)
+	local rarities = {}
+	for _, card in currentCards do
+		local def = CardRegistry.get(card.CardId)
+		if def then
+			table.insert(rarities, def.Rarity)
+		end
+	end
+	local tier = RevealStyle.packTier(rarities)
+	local art = CardArt.forPack(pack)
+	local cardHeight = layout.cardWidth * 1.5
+	local packViews: { Frame } = {}
+	for _, column in columns do
+		column.flipper.Visible = false
+		local view = Create("Frame", {
+			Name = "PackView",
+			Size = UDim2.fromOffset(layout.cardWidth, cardHeight),
+			Position = UDim2.fromOffset(layout.cardWidth / 2, cardHeight / 2),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 5,
+			Parent = column.frame,
+		})
+		if art then
+			Create("ImageLabel", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Image = art,
+				ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 5,
+				Parent = view,
+			})
+		else
+			local badge = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromScale(1, 1))
+			badge.ZIndex = 5
+			badge.Parent = view
+		end
+		local scale = Create("UIScale", { Scale = 0, Parent = view })
+		Components.tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+		table.insert(packViews, view)
+	end
+	setAction(nil)
+	if not Components.reducedMotion then
+		task.wait(0.45)
+		local shakes = 4 + tier * 3
+		for i = 1, shakes do
+			if not introRunning(token) then
+				return
+			end
+			local angle = (if i % 2 == 0 then 1 else -1) * (3 + tier * 2) * (i / shakes)
+			for _, view in packViews do
+				play(view, 0.06, { Rotation = angle })
+			end
+			task.wait(0.07)
+		end
+		if not introRunning(token) then
+			return
+		end
+		doFlash(if tier >= 4 then 0.9 else 0.6)
+		for p, view in packViews do
+			play(view, 0.25, { Rotation = 0 })
+			for _, child in view:GetDescendants() do
+				if child:IsA("ImageLabel") then
+					play(child, 0.25, { ImageTransparency = 1 })
+				elseif child:IsA("Frame") then
+					play(child, 0.25, { BackgroundTransparency = 1 })
+				end
+			end
+			burst(columns[p].frame, pack.Color, MAX_SPARKS // packs)
+		end
+		task.wait(0.3)
+	end
+	if not introRunning(token) then
+		return
+	end
+	for _, view in packViews do
+		view:Destroy()
+	end
+	for _, column in columns do
+		column.flipper.Visible = true
+	end
+	local current = plan
+	if current and RevealPlan.start(current) then
+		if current.phase == "summary" then
+			showSummary()
+		else
+			presentHidden()
+		end
+	end
+end
+
+-- 3. Every card of the opening with its details, then CLAIM ALL.
+showSummary = function()
+	local current = plan
+	if current then
+		RevealPlan.finish(current)
+	end
+	busy = false
+	clearStage()
+	skipButton.Visible = false
+	cardCatcher.Visible = false
+	local count = #currentCards
+	stageLabel(`{count} CARDS UNLOCKED!`, 0, 54)
+	local big = count <= 5
+	local tileWidth = if big then 190 else 140
+	local tileHeight = tileWidth * 1.5
+	local lineHeights: { number } = if big then { 26, 20, 22, 18 } else { 20, 16, 18, 15 }
+	local cellHeight = tileHeight + 8
+	for _, height in lineHeights do
+		cellHeight += height + 2
+	end
+	local grid = Create("ScrollingFrame", {
+		Name = "Summary",
+		Size = UDim2.new(1, -20, 1, -150),
+		Position = UDim2.fromOffset(10, 66),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Parent = stage,
+	}, {
+		Create("UIGridLayout", {
+			CellSize = UDim2.fromOffset(tileWidth, cellHeight),
+			CellPadding = UDim2.fromOffset(if big then 16 else 10, 10),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	for i, card in currentCards do
 		local def = CardRegistry.get(card.CardId)
 		if def then
 			local rarity = Config.Rarities.ById[def.Rarity]
 			local cell = Create("Frame", {
 				Name = "Card" .. i,
-				Size = UDim2.fromOffset(196, 470),
 				BackgroundTransparency = 1,
 				LayoutOrder = i,
-				Parent = row,
+				Parent = grid,
 			})
+			-- CardTile shows the +N% variant tag over the printed income.
 			local tile = CardTile.new(def, { Variant = card.Variant, IsNew = card.IsNew, Income = card.Income })
-			tile.Size = UDim2.fromOffset(196, 294)
+			tile.Size = UDim2.fromOffset(tileWidth, tileHeight)
 			tile.Parent = cell
-			type Line = { text: string, color: Color3?, height: number }
-			local lines: { Line } = {
-				{ text = string.upper(def.Name), color = Theme.Colors.Text, height = 30 },
+			local variantLabel = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
+			local variantDef = Config.Variants.ById[card.Variant]
+			local lines: { { text: string, color: Color3? } } = {
+				{ text = string.upper(def.Name), color = Theme.Colors.Text },
 				{
 					text = if rarity then rarity.DisplayName else def.Rarity,
 					color = if rarity then rarity.Color else nil,
-					height = 24,
 				},
-				{ text = `+{Format.rate(card.Income)}/S`, color = Theme.Colors.Cash, height = 26 },
+				{ text = `+{Format.rate(card.Income)}/S`, color = Theme.Colors.Cash },
 			}
-			local variantLabel = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
-			local variantDef = Config.Variants.ById[card.Variant]
 			if variantLabel then
-				table.insert(lines, {
-					text = variantLabel,
-					color = if variantDef then variantDef.Color else nil,
-					height = 22,
-				})
+				table.insert(lines, { text = variantLabel, color = if variantDef then variantDef.Color else nil })
 			end
-			local y = 302
-			for _, line in lines do
+			local y = tileHeight + 6
+			for l, line in lines do
 				Components.label({
 					Text = line.text,
-					Size = UDim2.new(1, 0, 0, line.height),
+					Size = UDim2.new(1, 0, 0, lineHeights[l]),
 					Position = UDim2.fromOffset(0, y),
 					Color = line.color,
 					Parent = cell,
 				})
-				y += line.height + 6
+				y += lineHeights[l] + 2
 			end
-			local scale = Create("UIScale", { Scale = 0, Parent = cell })
-			task.delay(if Components.reducedMotion then 0 else (i - 1) * 0.08, function()
-				Components.tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
-			end)
 		end
 	end
-	Components.button({
-		Text = "CONTINUE",
-		Style = "Green",
-		Size = UDim2.fromOffset(260, 64),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Parent = stage,
-		OnClick = function()
-			PackReveal.close()
-		end,
-	})
+	setAction("CLAIM ALL", "Green")
 end
 
 local function build()
@@ -496,27 +712,23 @@ local function build()
 		IgnoreGuiInset = true,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
-	-- Full-screen tap catcher: advances to the next card.
-	local backdrop: TextButton = Create("TextButton", {
+	Create("Frame", {
 		Name = "Backdrop",
-		Text = "",
-		AutoButtonColor = false,
+		Active = true, -- swallows clicks so the world/HUD behind can't be used
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(8, 8, 14),
 		BackgroundTransparency = 0.25,
 		Parent = screen,
 	})
-	backdrop.Activated:Connect(function()
-		advanceRequested = true
-	end)
-	root = Create("Frame", {
+	local root = Create("Frame", {
 		Name = "Root",
-		Size = UDim2.fromOffset(1100, 760),
+		Size = UDim2.fromOffset(ROOT_SIZE.X, ROOT_SIZE.Y),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Parent = screen,
 	})
+	-- Scales the whole scene to the screen (phones included).
 	Components.autoScale(root)
 	stage = Create("Frame", {
 		Name = "Stage",
@@ -526,33 +738,60 @@ local function build()
 		BackgroundTransparency = 1,
 		Parent = root,
 	})
-	hint = Components.label({
-		Text = "TAP TO CONTINUE",
-		Size = UDim2.new(0, 360, 0, 30),
-		Position = UDim2.new(0.5, 0, 1, -4),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Color = Theme.Colors.Muted,
+	-- Clicking a face-down card reveals the round, like CLICK TO REVEAL.
+	cardCatcher = Create("TextButton", {
+		Name = "CardClick",
+		Visible = false,
+		Text = "",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 470),
+		Position = UDim2.fromOffset(0, 110),
+		ZIndex = 2,
 		Parent = root,
 	})
-	hint.Visible = false
+	cardCatcher.Activated:Connect(function()
+		local current = plan
+		if current and current.phase == "hidden" then
+			revealRound(session)
+		end
+	end)
+	actionButton = Components.button({
+		Text = "CLICK TO REVEAL",
+		Style = "Orange",
+		Size = UDim2.fromOffset(300, 64),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Parent = root,
+		OnClick = function()
+			local current = plan
+			if current and current.phase == "summary" then
+				PackReveal.close()
+			else
+				onAction()
+			end
+		end,
+	})
+	actionButton.ZIndex = 10
 	skipButton = Components.button({
-		Text = "SKIP",
+		Text = "SKIP TO SUMMARY",
 		Style = "Gray",
-		Size = UDim2.fromOffset(130, 50),
+		Size = UDim2.fromOffset(220, 46),
 		Position = UDim2.new(1, -8, 0, 8),
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = root,
 		OnClick = function()
-			skipRequested = true
+			if plan and not busy then
+				showSummary()
+			end
 		end,
 	})
+	skipButton.ZIndex = 10
 	flash = Create("Frame", {
 		Name = "Flash",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 1,
 		ZIndex = 50,
-		Active = false,
 		Parent = screen,
 	})
 	gui = screen
@@ -562,8 +801,15 @@ function PackReveal.isOpen(): boolean
 	return gui ~= nil and (gui :: ScreenGui).Enabled
 end
 
--- Plays the sequence for an opening the server has already granted.
-function PackReveal.play(pack: Types.PackDef, cards: { RevealCard }, closed: (() -> ())?)
+-- Plays the scene for an opening the server has already granted. `packs` packs were opened
+-- together, `cardsPerPack` cards each; `cards` are in server order (pack by pack).
+function PackReveal.play(
+	pack: Types.PackDef,
+	cards: { RevealCard },
+	packs: number?,
+	cardsPerPack: number?,
+	closed: (() -> ())?
+)
 	if not gui then
 		build()
 	end
@@ -571,11 +817,31 @@ function PackReveal.play(pack: Types.PackDef, cards: { RevealCard }, closed: (()
 	session += 1
 	local token = session
 	onClosed = closed
-	advanceRequested, skipRequested = false, false
+	busy = false
+	local packCount = math.max(1, packs or 1)
+	local perPack = cardsPerPack or pack.CardsPerOpen
+	currentCards = cards
+	plan = RevealPlan.new(cards, packCount, perPack)
+	layout = layoutFor(packCount)
 	clearStage()
 	stage.Position = UDim2.fromScale(0.5, 0.5)
 	skipButton.Visible = true
 	screen.Enabled = true
+
+	-- Start downloading this opening's card art now, while the packs animate.
+	local ids = {}
+	local back = CardArt.back()
+	if back then
+		table.insert(ids, back)
+	end
+	for _, card in cards do
+		local def = CardRegistry.get(card.CardId)
+		local image = if def then frontImage(def) else nil
+		if image then
+			table.insert(ids, image)
+		end
+	end
+	ImagePreloader.preload(ids, "pack opening")
 
 	if not blur then
 		local effect = Instance.new("BlurEffect")
@@ -586,31 +852,20 @@ function PackReveal.play(pack: Types.PackDef, cards: { RevealCard }, closed: (()
 		play(effect, 0.3, { Size = 18 })
 	end
 
-	if Components.reducedMotion then
-		showSummary(cards)
-		return
-	end
-	task.spawn(function()
-		local completed = introPack(token, pack, cards)
-		if completed then
-			for index, card in cards do
-				if not revealCard(token, pack, card, index, #cards) then
-					break
-				end
-			end
-		end
-		-- Finished, skipped or tapped through: the summary, unless the player closed it.
-		if alive(token) then
-			showSummary(cards)
-		end
-	end)
+	roundLabel = stageLabel("", 0, 40, Theme.Colors.Muted)
+	buildColumns(packCount)
+	task.spawn(intro, token, pack, packCount)
 end
 
--- Closes the sequence (CONTINUE, or the player leaving the screen). Safe to call any time.
+-- Closes the scene (CLAIM ALL). Safe to call any time; the cards were granted already.
 function PackReveal.close()
 	session += 1
+	busy = false
+	plan = nil
+	currentCards = {}
 	if gui then
 		(gui :: ScreenGui).Enabled = false
+		cardCatcher.Visible = false
 		clearStage()
 	end
 	if blur then

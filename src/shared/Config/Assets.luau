@@ -17,6 +17,9 @@ export type ImageAsset = {
 	Width: number,
 	Height: number,
 	AssetId: number,
+	-- Optional small copy (assets/processed/<set>/thumbs/, 256x384) for small UI tiles.
+	-- 0 or nil = not uploaded: tiles use the full image (AssetId) instead.
+	ThumbAssetId: number?,
 }
 
 local function image(processed: string, source: string, assetId: number): ImageAsset
@@ -65,6 +68,10 @@ local Images: { [string]: ImageAsset } = {
 		"assets/source/Pack 1/obal.png",
 		104453844983670
 	),
+	-- Shared back of every card (unrevealed cards in the pack opening). Uploaded to Roblox
+	-- directly by the owner; there is no source file in the repository. Displayed at the
+	-- card fronts' 2:3 shape.
+	["card.back"] = image("", "", 129297477524368),
 }
 
 return table.freeze({

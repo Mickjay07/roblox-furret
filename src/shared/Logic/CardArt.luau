@@ -51,6 +51,39 @@ function CardArt.aspect(key: string?): number
 	return DEFAULT_ASPECT
 end
 
+-- The shared card back (unrevealed cards), or nil when it isn't uploaded.
+CardArt.BACK_KEY = "card.back"
+function CardArt.back(): string?
+	return CardArt.image(CardArt.BACK_KEY)
+end
+
+-- Small copy for little UI tiles: the thumbnail when uploaded, else the full image.
+function CardArt.thumbnail(key: string?): string?
+	local asset = if type(key) == "string" then Config.Assets.Images[key] else nil
+	local thumb = if asset then asset.ThumbAssetId else nil
+	if type(thumb) == "number" and thumb > 0 and thumb % 1 == 0 then
+		return `rbxassetid://{thumb}`
+	end
+	return CardArt.image(key)
+end
+
+-- Every uploaded image a client may need soon (card fronts, card back, pack fronts), for
+-- ContentProvider preloading. `thumbnails` also adds uploaded thumbnails.
+function CardArt.allContentIds(thumbnails: boolean?): { string }
+	local ids = {}
+	for key, asset in Config.Assets.Images do
+		local id = CardArt.image(key)
+		if id then
+			table.insert(ids, id)
+		end
+		if thumbnails and type(asset.ThumbAssetId) == "number" and (asset.ThumbAssetId :: number) > 0 then
+			table.insert(ids, `rbxassetid://{asset.ThumbAssetId}`)
+		end
+	end
+	table.sort(ids)
+	return ids
+end
+
 function CardArt.forCard(def: Types.CardDef): string?
 	return CardArt.image(def.Artwork)
 end

@@ -49,7 +49,7 @@ function ProfileSchema.defaults(): Types.PlayerData
 			LastJoin = 0,
 		},
 		Flags = { StarterGranted = false },
-		Purchases = { Receipts = {} },
+		Purchases = { Receipts = {}, Entitlements = {} },
 	}
 end
 

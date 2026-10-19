@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
+local Entitlements = require(Shared.Logic.Entitlements)
 local PackShop = require(Shared.Logic.PackShop)
 local Validate = require(Shared.Util.Validate)
 
@@ -44,38 +45,47 @@ function PackService:Start()
 		return { ok = true, packId = packId, owned = PackShop.owned(data, packId) }
 	end)
 
-	local openArgs: { Validate.Checker } = { Validate.oneOf(Config.Packs.ById), Validate.id(64) }
-	Net.onInvoke(Remotes.Functions.OpenPack, openArgs, function(player: Player, packId: string, requestId: string)
-		local data = DataService:GetData(player)
-		if not data then
-			return { ok = false, error = "Data not loaded" }
-		end
-		local response, opening = requests:open(data, player.UserId, packId, requestId, {
-			ownerId = player.UserId,
-			now = os.time(),
-			roll = function()
-				return rng:NextNumber()
-			end,
-		})
-		if not opening then
-			-- A failure (nothing changed) or a replay of an already-granted opening.
+	-- Opening sizes: 1, plus every Multi Opening product's pack count (3, 6).
+	local sizes: { [number]: boolean } = { [1] = true }
+	for _, product in Entitlements.products() do
+		sizes[product.Packs] = true
+	end
+	local openArgs: { Validate.Checker } = { Validate.oneOf(Config.Packs.ById), Validate.id(64), Validate.oneOf(sizes) }
+	Net.onInvoke(
+		Remotes.Functions.OpenPack,
+		openArgs,
+		function(player: Player, packId: string, requestId: string, packs: number)
+			local data = DataService:GetData(player)
+			if not data then
+				return { ok = false, error = "Data not loaded" }
+			end
+			local response, opening = requests:open(data, player.UserId, packId, requestId, {
+				ownerId = player.UserId,
+				now = os.time(),
+				roll = function()
+					return rng:NextNumber()
+				end,
+			}, packs)
+			if not opening then
+				-- A failure (nothing changed) or a replay of an already-granted opening.
+				return response
+			end
+			DataService:Patched(player, "Cards", opening.NewInstanceIds)
+			DataService:Patched(player, "Discovered", opening.DiscoveredIds)
+			DataService:Changed(player, "Packs")
+			DataService:Changed(player, "Currency")
+			DataService:Changed(player, "Progression")
+			DataService:Changed(player, "Stats")
+			if opening.LevelsGained > 0 then
+				DataService:Notify(
+					player,
+					`Level up! You reached level {data.Progression.Level} (+{opening.TreatsGained} Treats)`,
+					"success"
+				)
+			end
 			return response
 		end
-		DataService:Patched(player, "Cards", opening.NewInstanceIds)
-		DataService:Patched(player, "Discovered", opening.DiscoveredIds)
-		DataService:Changed(player, "Packs")
-		DataService:Changed(player, "Currency")
-		DataService:Changed(player, "Progression")
-		DataService:Changed(player, "Stats")
-		if opening.LevelsGained > 0 then
-			DataService:Notify(
-				player,
-				`Level up! You reached level {data.Progression.Level} (+{opening.TreatsGained} Treats)`,
-				"success"
-			)
-		end
-		return response
-	end)
+	)
 
 	Players.PlayerRemoving:Connect(function(player)
 		requests:forget(player.UserId)

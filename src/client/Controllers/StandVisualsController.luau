@@ -24,6 +24,7 @@ local CardRegistry = require(Shared.Logic.CardRegistry)
 local Format = require(Shared.Util.Format)
 
 local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
+local ImagePreloader = require(script.Parent.Parent.Lib.ImagePreloader)
 local UI = script.Parent.Parent.UI
 local Components = require(UI.Components)
 local Create = require(UI.Create)
@@ -278,6 +279,8 @@ end
 function StandVisualsController:Start()
 	-- Studio Output: how every artwork key resolves (key, AssetId, final content id).
 	ArtDiagnostics.report()
+	-- Download every card / pack image in the background now, not when first shown.
+	ImagePreloader.preloadAll()
 	local plots = workspace:WaitForChild("Plots")
 	for _, descendant in plots:GetDescendants() do
 		if isStand(descendant) then

@@ -38,7 +38,10 @@ ServerScriptService.Server        (src/server)
   Services/
     DataService                   load/save lifecycle, replication, leaderstats
     SettingsService               UpdateSetting
-    PackService                   BuyPack (to pack inventory), OpenPack (server-side Random)
+    PackService                   BuyPack (to pack inventory), OpenPack (1/3/6 packs, server-side
+                                  Random, idempotent per request id via Lib/PackOpenRequests)
+    MonetizationService           Multi Opening Developer Products: the ONLY ProcessReceipt
+                                  handler (Lib/ReceiptProcessor), PromptMultiOpen, product check
     CardService                   PlaceCard, RemoveCard, PlaceBest, SellCards, SetFavorite
     UpgradeService                BuyUpgrade
     EconomyService                stand earnings tick, CollectEarnings, offline earnings

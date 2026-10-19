@@ -11,6 +11,7 @@ local Types = require(Shared.Types)
 local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
+local Entitlements = require(Shared.Logic.Entitlements)
 local PackRoller = require(Shared.Logic.PackRoller)
 local Progression = require(Shared.Logic.Progression)
 local Format = require(Shared.Util.Format)
@@ -31,35 +32,49 @@ local PacksController = {}
 -- One pack opening at a time: set from the OPEN click until the reveal is closed.
 local opening = false
 
--- Opens ONE owned pack. The server consumes it and grants the cards before replying; the
+-- Opens `packs` owned packs together (1, or 3 / 6 with Multi Opening). The server checks the
+-- unlock and the pack count, consumes the packs and grants the cards before replying; the
 -- request id makes a repeated request (double click, retry) return the same result
--- instead of opening another pack. The reveal is purely visual.
-local function openPack(pack: Types.PackDef)
+-- instead of opening more packs. The reveal is purely visual.
+local function openPack(pack: Types.PackDef, packs: number)
 	if opening or PackReveal.isOpen() then
 		return
 	end
 	local data = DataController:Get()
-	if not data or (data.Packs[pack.Id] or 0) < 1 then
+	if not data or (data.Packs[pack.Id] or 0) < packs or not Entitlements.canUseMode(data, packs) then
 		return
 	end
 	opening = true
 	local requestId = HttpService:GenerateGUID(false)
-	local result = Request(Remotes.Functions.OpenPack, pack.Id, requestId)
+	local result = Request(Remotes.Functions.OpenPack, pack.Id, requestId, packs)
 	if not result.ok or type(result.cards) ~= "table" then
 		opening = false
 		return
 	end
-	PackReveal.play(pack, result.cards, function()
+	PackReveal.play(pack, result.cards, result.packs, result.cardsPerPack, function()
 		opening = false
 	end)
+end
+
+-- Robux price published by the server after it verified the Developer Product (nil until
+-- then, or when the product could not be verified).
+local function productState(key: string): (boolean, number?)
+	local folder = ReplicatedStorage:FindFirstChild("ProductInfo")
+	if not folder then
+		return false, nil
+	end
+	local price = folder:GetAttribute(`{key}_Price`)
+	return folder:GetAttribute(`{key}_Available`) == true, if type(price) == "number" then price else nil
 end
 
 -- One shop row per pack.
 local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amount = 1
+	-- Opening size for this row: 1, 3 or 6 packs at once.
+	local mode = 1
 	local row = Create("Frame", {
 		Name = pack.Id,
-		Size = UDim2.new(1, -12, 0, 124),
+		Size = UDim2.new(1, -12, 0, 172),
 		BackgroundColor3 = Theme.Colors.PanelInset,
 		LayoutOrder = pack.Order,
 		Parent = list,
@@ -149,9 +164,52 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
-			openPack(pack)
+			openPack(pack, mode)
 		end,
 	})
+
+	-- Opening mode strip: 1 pack always; 3x / 6x once unlocked (Developer Products).
+	Components.label({
+		Text = "OPEN:",
+		Size = UDim2.fromOffset(70, 30),
+		Position = UDim2.fromOffset(16, 130),
+		XAlign = Enum.TextXAlignment.Left,
+		Color = Theme.Colors.Muted,
+		Parent = row,
+	})
+	local refreshModes: () -> () = function() end
+	local modeButtons: { { packs: number, product: Entitlements.Product?, button: TextButton } } = {}
+	local modeOptions: { { packs: number, product: Entitlements.Product? } } = { { packs = 1, product = nil } }
+	for _, product in Entitlements.products() do
+		table.insert(modeOptions, { packs = product.Packs, product = product })
+	end
+	for i, option in modeOptions do
+		local button = Components.button({
+			Text = "",
+			Style = "Blue",
+			Size = UDim2.fromOffset(196, 36),
+			Position = UDim2.fromOffset(90 + (i - 1) * 206, 128),
+			Parent = row,
+			OnClick = function()
+				local data = DataController:Get()
+				if not data then
+					return
+				end
+				if Entitlements.canUseMode(data, option.packs) then
+					mode = option.packs
+					refreshModes()
+					return
+				end
+				local product = option.product
+				if product and Entitlements.canPurchase(data, product.Key) then
+					-- The server re-checks the prerequisite and prompts the Developer Product.
+					-- Ownership arrives only through the server's ProcessReceipt.
+					Request(Remotes.Functions.PromptMultiOpen, product.Key)
+				end
+			end,
+		})
+		table.insert(modeButtons, { packs = option.packs, product = option.product, button = button })
+	end
 	Components.button({
 		Text = "-",
 		Style = "Blue",
@@ -231,14 +289,62 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		local owned = data.Packs[pack.Id] or 0
 		-- Owned packs stay openable even if the pack can no longer be bought.
 		lock.Visible = missing ~= nil and owned == 0
-		Components.setButtonText(open, if owned > 0 then `OPEN ({owned})` else "NO PACKS")
-		Components.setButtonStyle(open, if owned > 0 then "Orange" else "Gray")
+		if not Entitlements.canUseMode(data, mode) then
+			mode = 1
+		end
+		Components.setButtonText(
+			open,
+			if owned >= mode
+				then (if mode > 1 then `OPEN {mode}x ({owned})` else `OPEN ({owned})`)
+				elseif owned > 0 then `NEED {mode} PACKS`
+				else "NO PACKS"
+		)
+		Components.setButtonStyle(open, if owned >= mode then "Orange" else "Gray")
+		for _, entry in modeButtons do
+			local label, style
+			if Entitlements.canUseMode(data, entry.packs) then
+				label = if entry.packs == 1 then "1 PACK" else `{entry.packs} PACKS`
+				style = if entry.packs == mode then "Orange" else "Blue"
+			elseif entry.product then
+				local product = entry.product :: Entitlements.Product
+				local available, price = productState(product.Key)
+				local canBuy, _ = Entitlements.canPurchase(data, product.Key)
+				if product.Requires and not Entitlements.owns(data, product.Requires) then
+					local required = Entitlements.product(product.Requires)
+					label, style = `{entry.packs}x - NEEDS {if required then `{required.Packs}x` else "UNLOCK"}`, "Gray"
+				elseif Entitlements.owns(data, product.Key) then
+					label, style = `{entry.packs}x - LOCKED`, "Gray"
+				elseif canBuy and available then
+					label, style =
+						if price then `UNLOCK {entry.packs}x  R${price}` else `UNLOCK {entry.packs}x`, "Purple"
+				else
+					label, style = `{entry.packs}x - UNAVAILABLE`, "Gray"
+				end
+			end
+			Components.setButtonText(entry.button, label or "")
+			Components.setButtonStyle(entry.button, style or "Gray")
+		end
 		local affordable = (data.Currency[pack.Currency] or 0) >= pack.Price * amount
 		Components.setButtonStyle(buy, if affordable and missing == nil then "Green" else "Gray")
 		lockText.Text = if missing then string.upper(missing) else ""
 	end
 	DataController:Observe("Progression", refresh)
 	DataController:Observe("Packs", refresh)
+	DataController:Observe("Purchases", refresh)
+	refreshModes = function()
+		local data = DataController:Get()
+		if data then
+			refresh(data)
+		end
+	end
+	task.spawn(function()
+		-- Prices and availability appear once the server has verified the products.
+		local folder = ReplicatedStorage:WaitForChild("ProductInfo", 30)
+		if folder then
+			folder.AttributeChanged:Connect(refreshModes)
+			refreshModes()
+		end
+	end)
 	onAmountChanged = function()
 		local data = DataController:Get()
 		if data then

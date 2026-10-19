@@ -69,6 +69,18 @@ describe("built place", function()
 		{ path = { "ReplicatedStorage", "Shared", "Config", "Visuals" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "CardArt" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "RevealStyle" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "RevealPlan" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "Entitlements" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Lib", "ReceiptProcessor" }, class = "ModuleScript" },
+		{
+			path = { "ServerScriptService", "Server", "Services", "MonetizationService" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "ImagePreloader" },
+			class = "ModuleScript",
+		},
+		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "Coalesce" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "PackOpenRequests" }, class = "ModuleScript" },
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "PackReveal" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "PlotAllocator" }, class = "ModuleScript" },

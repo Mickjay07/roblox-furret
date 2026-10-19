@@ -12,9 +12,13 @@ local Remotes = {
 		UpdateSetting = "UpdateSetting",
 		-- (packId, amount) -> { owned } buys packs into the pack inventory
 		BuyPack = "BuyPack",
-		-- (packId, requestId) opens ONE owned pack -> { cards = { RevealCard }, levelsGained,
-		-- treatsGained }. Repeating a requestId returns the same result (no second pack).
+		-- (packId, requestId, packs) opens 1, 3 or 6 owned packs together (3 and 6 need the
+		-- Multi Opening unlocks) -> { packs, cardsPerPack, cards = { RevealCard },
+		-- levelsGained, treatsGained }. Repeating a requestId returns the same result.
 		OpenPack = "OpenPack",
+		-- (productKey) asks the server to prompt a Multi Opening Developer Product; the server
+		-- checks the prerequisite first. Ownership is only granted by ProcessReceipt.
+		PromptMultiOpen = "PromptMultiOpen",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",
 		-- () moves your character to your own plot

@@ -131,7 +131,8 @@ function CardTile.new(def: Types.CardDef, options: Options?): GuiButton
 	local opts: Options = options or {}
 	local rarity = Config.Rarities.ById[def.Rarity]
 	local variant = Config.Variants.ById[opts.Variant or "Normal"] or Config.Variants.ById.Normal
-	local uploaded = CardArt.forCard(def)
+	-- Tiles show the art at ~150-200 px: use the small thumbnail when it is uploaded.
+	local uploaded = CardArt.thumbnail(def.Artwork)
 	if uploaded then
 		ArtDiagnostics.watch("CardTile", def.Artwork, uploaded)
 	else

@@ -265,26 +265,64 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
       and `game.ReplicatedStorage.Remotes:FindFirstChild("DevCommand")` returns nil in the
       client console.
 
-### 1.13 Pack opening sequence (§7.5, roadmap A7)
-Use `packs pack1 5` in the DEV panel, then the Pack Shop's OPEN button.
-- [ ] OPEN consumes exactly **one** pack: the count on the button drops by 1.
-- [ ] Sequence: the world blurs, the pack front appears in the centre and shakes, then
-      bursts with a flash. Five cards follow one by one: card back, flip, then the art.
-- [ ] Each card shows its name, rarity (in rarity colour), income (`+70/S`, and `+71.4/S`
-      for a Shiny Sandy), `SHINY +2%` for a Shiny copy, `NEW!` and `1 IN N`.
-- [ ] Rarer cards get bigger effects. Uncommon: glow. Rare: glow and sparkles. Epic: also
-      rotating rays and an "EPIC!" banner. Legendary and Mythic: also a white flash, a
-      stage shake and a banner. Use `roll pack1 20` to see what to expect, or open several.
-- [ ] Tapping advances to the next card; cards also advance on their own after a few
-      seconds. SKIP jumps to the summary.
-- [ ] Summary: all five cards with name, rarity, income and the "+2%" tag on Shiny tiles.
-      CONTINUE closes it and removes the blur.
-- [ ] Clicking OPEN rapidly opens only one pack; OPEN does nothing while the sequence is
-      showing.
-- [ ] The five cards are in the backpack (and saved) even if you stop the test in the middle
-      of the sequence, then rejoin.
-- [ ] Reduced Motion on (Settings): the summary appears straight away.
-- [ ] Full backpack: OPEN shows an error toast and the pack is not consumed.
+### 1.13 Pack opening: manual reveal (§7.5, roadmap A7)
+Use `packs pack1 10` in the DEV panel, then the Pack Shop.
+- [ ] Mode strip shows `1 PACK` (selected), `UNLOCK 3x  R$<price>` (purple) and
+      `6x - NEEDS 3x` (grey, not clickable).
+- [ ] `OPEN (10)` consumes exactly **one** pack: the count drops to 9.
+- [ ] The world blurs, the pack front appears, shakes and bursts; then the **shared card
+      back** (the uploaded image, not a drawn "?") is shown.
+- [ ] Nothing happens on its own: the card stays face down until CLICK TO REVEAL (or a
+      click on the card). Wait 30 s to confirm there is no timer.
+- [ ] After the flip: the card art, name, rarity colour, income (`+71.4/S` for a Shiny
+      Sandy), and `SHINY +2%` / `NEW!` / `1 IN N`. Effects grow with rarity.
+- [ ] NEXT CARD is required for every card; after card 5 the button reads SEE ALL CARDS.
+- [ ] Summary: `5 CARDS UNLOCKED!` with all five tiles (Shiny tiles show "+2%"); CLAIM ALL
+      closes it and removes the blur.
+- [ ] Rapid clicks on OPEN, CLICK TO REVEAL and NEXT CARD never open a second pack or skip
+      a card. SKIP TO SUMMARY works at any point.
+- [ ] Stop the test mid-reveal and rejoin: all five cards are in the backpack.
+- [ ] Full backpack: OPEN shows an error toast and no pack is consumed.
+
+### 1.14 Multi Opening Developer Products (3x / 6x)
+The place must be **published** (Developer Products belong to the experience). In Studio,
+purchases are test purchases (no Robux charged) and still run `ProcessReceipt`.
+- [ ] Server Output at start: `[Monetization] 3x Multi Opening (2038324873) "...":
+      Developer Product, N Robux` and the same for 6x. **Check N = 100 for 3x.** A warning
+      that it "looks like a GAME PASS id" or "is not a Developer Product" means the id is
+      wrong or of the wrong type: the option then shows `UNAVAILABLE`.
+- [ ] Click `UNLOCK 3x`: the Roblox purchase prompt appears. Buy (test purchase):
+      toast `3x Multi Opening unlocked!`, the strip shows `3 PACKS`, `6x` becomes
+      `UNLOCK 6x  R$<price>`.
+- [ ] Rejoin: 3x is still unlocked (saved in `Purchases.Entitlements`).
+- [ ] Cancel a purchase prompt: nothing is unlocked.
+- [ ] Before owning 3x, the 6x button can't prompt; from the client command bar,
+      `game.ReplicatedStorage.Remotes.PromptMultiOpen:InvokeServer("MultiOpen6")` returns
+      `Unlock 3x Multi Opening first`.
+- [ ] Opening 3x without the unlock is refused by the server:
+      `...Remotes.OpenPack:InvokeServer("pack1", "probe-1", 3)` returns an error, no packs
+      consumed.
+
+### 1.15 Simultaneous 3x / 6x opening
+- [ ] Select `3 PACKS`, OPEN: three packs are consumed (count drops by 3), three packs
+      appear side by side and shake/burst together, then three card backs.
+- [ ] Each CLICK TO REVEAL flips **three** cards at once (card 1 of each pack), NEXT CARD
+      turns all three face down for card 2. Five clicks reveal all 15 cards.
+- [ ] Summary `15 CARDS UNLOCKED!` scrolls and shows all 15 with name, rarity, income,
+      variant bonus.
+- [ ] With 6x unlocked: six columns, six cards per click, `30 CARDS UNLOCKED!`.
+- [ ] With fewer packs than the mode (e.g. 2 packs in 3x mode) OPEN reads `NEED 3 PACKS`
+      and is disabled.
+- [ ] Phone layout (Device emulator, e.g. iPhone SE): six columns and their text stay
+      readable; the summary scrolls.
+
+### 1.16 Image loading (evidence for performance)
+- [ ] Client Output after joining: `[Art] preload startup: <n>/<n> images in X.XXs` plus
+      one line per image with its time. Note the numbers (first join vs rejoin).
+- [ ] When opening a pack: `[Art] preload pack opening: ...` appears during the pack
+      animation; the flipped art shows immediately (no blank card).
+- [ ] Open the backpack after opening packs: it re-renders once per change (no visible
+      double rebuild).
 
 ## Part 2: specification features (run when implemented)
 

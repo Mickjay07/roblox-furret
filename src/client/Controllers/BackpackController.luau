@@ -18,6 +18,7 @@ local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
+local Coalesce = require(script.Parent.Parent.Lib.Coalesce)
 local Request = require(script.Parent.Parent.Lib.Request)
 local DataController = require(script.Parent.DataController)
 
@@ -295,11 +296,13 @@ function BackpackController:Start()
 		end,
 	})
 
-	-- Re-render while open when cards or stands change.
+	-- Re-render while open when cards or stands change: once per frame, however many of
+	-- these keys arrive together (a pack opening sends several).
+	local scheduleRender = Coalesce(render)
 	for _, key in { "Cards", "Display", "Upgrades" } do
 		DataController.Changed:Connect(function(changed)
 			if changed == key or changed == "*" then
-				render()
+				scheduleRender()
 			end
 		end)
 	end

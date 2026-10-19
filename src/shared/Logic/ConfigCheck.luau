@@ -84,6 +84,34 @@ function ConfigCheck.run(config: any?): { string }
 			if type(asset.AssetId) ~= "number" or asset.AssetId < 0 or asset.AssetId % 1 ~= 0 then
 				problem(`asset {key}: AssetId must be a non-negative integer`)
 			end
+			local thumb = asset.ThumbAssetId
+			if thumb ~= nil and (type(thumb) ~= "number" or thumb < 0 or thumb % 1 ~= 0) then
+				problem(`asset {key}: ThumbAssetId must be a non-negative integer`)
+			end
+		end
+	end
+
+	-- Multi Opening products: valid ids, unique pack counts, prerequisites that exist.
+	if Config.Monetization and Config.Monetization.MultiOpen then
+		local seenPacks: { [number]: boolean } = {}
+		for key, product in Config.Monetization.MultiOpen :: { [string]: any } do
+			if product.Key ~= key then
+				problem(`MultiOpen {key}: Key must match its table key`)
+			end
+			if type(product.ProductId) ~= "number" or product.ProductId < 0 or product.ProductId % 1 ~= 0 then
+				problem(`MultiOpen {key}: ProductId must be a non-negative integer`)
+			end
+			if type(product.Packs) ~= "number" or product.Packs < 2 or seenPacks[product.Packs] then
+				problem(`MultiOpen {key}: Packs must be >= 2 and unique`)
+			else
+				seenPacks[product.Packs] = true
+				if product.Packs > Config.Game.Limits.MaxPacksPerPurchase then
+					problem(`MultiOpen {key}: Packs exceeds MaxPacksPerPurchase`)
+				end
+			end
+			if product.Requires ~= nil and Config.Monetization.MultiOpen[product.Requires] == nil then
+				problem(`MultiOpen {key}: requires unknown product {product.Requires}`)
+			end
 		end
 	end
 

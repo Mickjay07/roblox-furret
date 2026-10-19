@@ -12,6 +12,8 @@ assets/source/<source> and writes assets/processed/<target>:
     below the threshold are kept as they are.
   * Verified: the four corners must be fully transparent (no baked checkerboard or
     background), otherwise the script stops and reports the file.
+  * Thumbnails: every card also gets a THUMB_SIDE copy in <folder>/thumbs/ for small UI
+    tiles (backpack grid, binder, pack summary), which only show the art at ~150-200 px.
 
 Usage (repository root):  python3 scripts/assets/process_card_art.py
 Requires Pillow (pip install pillow).
@@ -25,6 +27,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SOURCE = os.path.join(ROOT, "assets", "source")
 OUTPUT = os.path.join(ROOT, "assets", "processed")
 MAX_SIDE = 1024
+THUMB_SIDE = 384
 SNAP_THRESHOLD = 250
 
 # source path (under assets/source) -> processed path (under assets/processed)
@@ -59,7 +62,18 @@ def process(src_rel: str, dst_rel: str) -> str:
 
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     image.save(dst, optimize=True)
-    return f"{src_rel} ({w}x{h}) -> {dst_rel} {image.size[0]}x{image.size[1]} {os.path.getsize(dst) // 1024} KB"
+    report = f"{src_rel} ({w}x{h}) -> {dst_rel} {image.size[0]}x{image.size[1]} {os.path.getsize(dst) // 1024} KB"
+
+    if os.path.basename(dst_rel).startswith("card_"):
+        thumb_rel = os.path.join(os.path.dirname(dst_rel), "thumbs", os.path.basename(dst_rel))
+        thumb = os.path.join(OUTPUT, thumb_rel)
+        tw, th = image.size
+        tscale = THUMB_SIDE / max(tw, th)
+        small = image.resize((round(tw * tscale), round(th * tscale)), Image.LANCZOS)
+        os.makedirs(os.path.dirname(thumb), exist_ok=True)
+        small.save(thumb, optimize=True)
+        report += f"; thumb {small.size[0]}x{small.size[1]} {os.path.getsize(thumb) // 1024} KB"
+    return report
 
 
 def main() -> None:
