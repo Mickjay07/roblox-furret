@@ -3,6 +3,48 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Card income audit (artwork = source of truth)
+
+**Artwork vs config:** the printed "+N/s" was re-read from each Pack 1 image: Sandy 70,
+Boba 118, Sky 420, Kingston 750, Aurora 1,200, Frost 1,500. `Config/Cards.luau` already
+matched all six, so no values changed. No artwork exists for Shiny or any other variant, so
+the printed value is the Normal (base) income. The older placeholder sets (Burrow etc.) have
+no artwork and were left unchanged. Each card also shows four paw icons with three filled;
+no rule maps them to data, so they were not interpreted.
+
+**Formulas audited (no change needed):**
+- One formula, in `Logic/Economy`: card income = BaseIncome × variant × grade.
+  - Stand income = card income × (1 + IncomeBoost + completed-collection bonuses) × server
+    extra (`EconomyService:ExtraMultiplier`, currently 1).
+  - CASH/S (`Economy.totalIncome`) = the sum of the stand incomes.
+- The variant multiplier is applied exactly once. Every caller (HUD, Display window,
+  backpack, reveal, stands, DevCommands, server accrual) uses `Economy`/`IncomeLedger`;
+  nothing recomputes income.
+- Per-stand accrual, the 2 h stand cap, single-stand collect and Collect All all use
+  `IncomeLedger.standIncome`. Collect All pays the same as collecting each stand.
+
+**Display fix:**
+- **Problem:** the 3D stand illustration showed the printed base income even for a
+  variant copy. A Shiny Sandy floated with "+70/s" while earning 105/s, and the placeholder
+  card also printed BaseIncome.
+- **Fix:** `PlotView`/`PlotService` now publish each stand's `CardIncome` attribute, from
+  `Economy.cardIncome` on the server. The stand shows an income tag when it differs from the
+  printed value (as inventory tiles already did), and the placeholder prints it. The client
+  only displays the number and never recomputes it.
+
+**Tests:** new `tests/unit/CardIncome.spec.luau` (12 tests):
+- the printed incomes match `BaseIncome`;
+- Shiny and every other variant are applied once (Sandy Shiny = 105, not 157.5);
+- grade stacks once on top of the variant;
+- the stand `CardIncome` matches `Economy.cardIncome`;
+- CASH/S = the sum of printed incomes × the Pack 1 completion bonus, and = the sum of
+  stand incomes with variants and upgrades; locked and empty stands count nothing;
+- per-stand accrual, Collect All (pays the sum once), stand-by-stand collection = Collect
+  All, and the cap at variant income.
+
+`SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: all checks passed, 197 tests. Not verified in
+Studio.
+
 ## 2026-10-19: Fix `install-tools.sh` on macOS (Apple Silicon)
 
 **Problem:** the installer always downloaded the Linux x86-64 builds. On an Apple Silicon Mac,

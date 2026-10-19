@@ -41,6 +41,7 @@ local function applyStands(index: number, states: { PlotView.StandState }, owner
 			stand:SetAttribute("Unlocked", state.Unlocked)
 			stand:SetAttribute("CardId", state.CardId)
 			stand:SetAttribute("Variant", state.Variant)
+			stand:SetAttribute("CardIncome", state.CardIncome)
 			local top = stand:FindFirstChild("Top")
 			if top and top:IsA("BasePart") then
 				top.Color = if state.Unlocked

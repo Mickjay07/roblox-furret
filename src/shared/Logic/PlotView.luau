@@ -10,6 +10,9 @@ export type StandState = {
 	Unlocked: boolean,
 	CardId: string?,
 	Variant: string?,
+	-- The card's income per second from the central formula (Economy.cardIncome: base x
+	-- variant x grade), so clients can show it without recomputing it.
+	CardIncome: number?,
 }
 
 local PlotView = {}
@@ -19,13 +22,15 @@ function PlotView.standStates(data: Types.PlayerData, maxStands: number): { Stan
 	local unlocked = math.min(Economy.displaySlotCount(data), maxStands)
 	local out: { StandState } = {}
 	for slot = 1, maxStands do
-		local state: StandState = { Slot = slot, Unlocked = slot <= unlocked, CardId = nil, Variant = nil }
+		local state: StandState =
+			{ Slot = slot, Unlocked = slot <= unlocked, CardId = nil, Variant = nil, CardIncome = nil }
 		if state.Unlocked then
 			local instanceId = data.Display[tostring(slot)]
 			local instance = if instanceId then data.Cards[instanceId] else nil
 			if instance then
 				state.CardId = instance.CardId
 				state.Variant = instance.Variant
+				state.CardIncome = Economy.cardIncome(instance)
 			end
 		end
 		table.insert(out, state)
@@ -37,7 +42,7 @@ end
 function PlotView.empty(maxStands: number): { StandState }
 	local out: { StandState } = {}
 	for slot = 1, maxStands do
-		table.insert(out, { Slot = slot, Unlocked = false, CardId = nil, Variant = nil })
+		table.insert(out, { Slot = slot, Unlocked = false, CardId = nil, Variant = nil, CardIncome = nil })
 	end
 	return out
 end
