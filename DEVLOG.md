@@ -3,6 +3,59 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Audit against the recovered specification
+
+**Input:** the owner committed the original master specification to `docs/SPEC.md`
+(commit `60c0cc8`, 36 sections, 2,081 lines). It is now the source of truth, replacing the
+earlier "spec not recovered" document and the assumption register.
+
+**Changed**
+- **`docs/STATUS.md`:** rewritten as a requirement-by-requirement audit (178 rows, §1–§33).
+  The results:
+
+  | Classification | Rows |
+  | --- | --- |
+  | ✅ Implemented and tested | 52 |
+  | 🟡 Implemented, not verified in Studio | 12 |
+  | 🟠 Partially implemented | 37 |
+  | ⬜ Not implemented | 61 |
+  | ❌ Conflicts with the specification | 16 |
+
+  The file also covers:
+  - **16 conflicts (C1–C16)**, each with a recommended change and its migration impact.
+    The main ones: UI-only stands instead of physical plots; income auto-credited instead
+    of collected; no offline earnings; no pack inventory or starter packs; the instant
+    reveal instead of the §7.5 sequence; grading by sub-grades instead of a per-grade
+    probability table; income scaled by collection tier instead of §32's rarity bands; a
+    full-rebuild backpack.
+  - **13 documented ambiguities (Q1–Q13)**, left undecided.
+  - **Config differences** against §11 and §32.
+  - **The data migration plan:** schema v1 stays as it is; everything is additive except
+    the optional Treats and SellBonus removals, which are to be batched into one v2
+    migration.
+  - **The fate of the old assumptions** A1–A40.
+- **`docs/ROADMAP.md`** (new): Gate 0 (owner answers and a first Studio smoke test), then
+  Phases A–F following the spec's dependency order. **The recommended next phase is
+  A:** physical plots, stands, in-world 2D ferret illustrations, collectable and offline
+  income, pack inventory and the opening sequence, and rebalancing to §32.
+- **`docs/TESTING.md`:** a practical Studio checklist. Part 1 covers what exists today,
+  including client command-bar exploit probes. Part 2 is pre-written for each spec feature
+  on the roadmap.
+- **Bug fix found during the audit:** `Validate.instanceId` rejected the negative UserIds
+  that Studio gives local players under *Test → Clients and Servers*. In multiplayer Studio
+  tests, every place, remove, sell and favourite request would have failed. The pattern is
+  now `^%-?%d+%-%d+$`. A regression test was added, and mutation-checked: it fails without
+  the fix.
+- No other code, config or schema changes. Working systems were left as they are; the
+  conflicts are scheduled in the roadmap.
+
+**Verified (cloud container)**
+- `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: StyLua, Selene (offline std), Rojo build
+  and luau-lsp all pass; Lune **114 passed, 0 failed**.
+
+**Not verified**
+- No Roblox Studio session has been run.
+
 ## 2026-10-19: Specification review (no features added)
 
 **Searched for the master specification.** Not found in:

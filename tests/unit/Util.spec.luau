@@ -17,6 +17,17 @@ describe("Validate", function()
 		expect((id(5))).toBe(false)
 	end)
 
+	it("accepts instance ids for real and Studio test players only", function()
+		local check = Validate.instanceId()
+		expect((check("123456-7"))).toBe(true)
+		expect((check("-1-5"))).toBe(true) -- Studio Clients and Servers players have negative ids
+		expect((check("--1-5"))).toBe(false)
+		expect((check("1-"))).toBe(false)
+		expect((check("../../x"))).toBe(false)
+		expect((check("1-2-3"))).toBe(false)
+		expect((check(15))).toBe(false)
+	end)
+
 	it("checks integers including NaN and infinity", function()
 		local int = Validate.integer(1, 10)
 		expect((int(5))).toBe(true)

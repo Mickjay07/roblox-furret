@@ -3,19 +3,18 @@
 A Roblox collectible card tycoon game. The source code lives in this repository as plain
 Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 
-> **Status:** Phases 1 and 2 are implemented.
+> **Status:** The foundation and an interim core loop are implemented: data-driven config,
+> server-authoritative packs, inventory, UI-based stands, income, upgrades and binders, with
+> session-locked persistence.
 >
-> - **Phase 1 (foundation):** configuration, card registry, player data, session-locked
->   persistence, validated remotes and the HUD.
-> - **Phase 2 (core loop):** buy and open packs, card reveal, backpack, display stands with
->   passive income, selling, upgrades and the binder.
+> The recovered master specification ([docs/SPEC.md](docs/SPEC.md)) is now the source of
+> truth.
 >
-> Nothing has been play-tested in Roblox Studio yet.
+> - [docs/STATUS.md](docs/STATUS.md) audits every requirement against it: 16 conflicts, and
+>   the core 3D features (plots, stands, in-world ferret illustrations) are not built yet.
+> - [docs/ROADMAP.md](docs/ROADMAP.md) gives the next steps.
 >
-> **The master game specification has not been recovered.** [docs/SPEC.md](docs/SPEC.md)
-> lists the requirements on record and the missing ones.
-> [docs/STATUS.md](docs/STATUS.md#assumption-register) classifies every design assumption.
-> See also [DEVLOG.md](DEVLOG.md).
+> Nothing has been play-tested in Roblox Studio yet. See [DEVLOG.md](DEVLOG.md).
 
 ## Prerequisites
 

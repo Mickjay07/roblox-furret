@@ -1,215 +1,520 @@
-# Implementation status
+# Implementation status: audit against the specification
 
-Last updated: 2026-10-19 (specification review after Phase 2).
+Last updated: 2026-10-19.
 
-Legend: ✅ implemented and covered by automated tests · 🟡 implemented, needs a Studio play
-test · ⬜ not started.
+The audit compares the code on branch `claude/ferret-card-tycoon-setup-8vqo00` against the
+recovered master specification ([SPEC.md](SPEC.md), 36 sections, 2,081 lines, commit
+`60c0cc8`).
 
-None of this has been play-tested in Roblox Studio yet. Studio cannot run in the cloud
-environment. See [TESTING.md](TESTING.md) for the manual checklist.
+**The specification is the source of truth.** Where earlier phase briefs, assumptions or
+implementation decisions disagree with it, the specification wins, and the disagreement is
+listed under [Conflicts](#conflicts-with-the-specification).
 
-## Phase 2: Core gameplay loop
+**Nothing has been play-tested in Roblox Studio.** Studio cannot run in the cloud
+environment. "Tested" in this document always means automated tests (Lune unit tests, the
+type check and the place-structure check), never a Studio session. See
+[TESTING.md](TESTING.md).
 
-| Area | Status | Where |
+The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md).
+
+## Legend
+
+| Mark | Classification | Meaning |
 | --- | --- | --- |
-| Buy and open packs: server-side rolls, unlock and capacity checks, XP and level-ups with a Treats reward | ✅ logic / 🟡 live | `Logic/PackShop.luau`, `Services/PackService.luau` |
-| Card reveal overlay (staggered pop-in, NEW! badges, "1 IN X" odds) | 🟡 | `Controllers/PacksController.luau` |
-| Pack shop window (quantity ×1–10, found count, chase-card odds, lock reasons) | 🟡 | `PacksController` |
-| Display stands: place, move, remove, Place Best, sanitize | ✅ logic / 🟡 UI | `Logic/Display.luau`, `Services/CardService.luau`, `DisplayController` |
-| Passive income every second from stands (upgrade and collection multipliers) | ✅ maths / 🟡 live | `Logic/Economy.luau`, `Services/EconomyService.luau` |
-| Backpack window (grid, sort by recent, rarity or best; capacity; detail panel with stand, favourite and sell actions) | 🟡 | `BackpackController` |
-| Selling: all-or-nothing, protects favourite and displayed cards; favourites | ✅ logic / 🟡 UI | `Logic/Market.luau`, `CardService` |
-| Upgrades window and purchases (stands, income, luck, sell bonus, backpack space) | ✅ logic / 🟡 UI | `Logic/UpgradeShop.luau`, `UpgradeService`, `UpgradesController` |
-| Binder window (collection progress, discovered and unknown cards, completion bonus) | 🟡 | `BinderController` |
-| Starter cards placed on stands automatically | ✅ | `Logic/Account.luau` |
-| Economy pacing simulation | ✅ tool | `scripts/simulate.luau` |
+| ✅ | Implemented and tested | The rule is implemented, and automated tests cover it. Runtime behaviour in Studio is still unverified |
+| 🟡 | Implemented, not verified in Studio | Code exists but has no automated test (wiring, UI, live services) |
+| 🟠 | Partially implemented | Some of the requirement exists; the gaps are listed |
+| ⬜ | Not implemented | Nothing exists yet (config placeholders or reserved fields don't count) |
+| ❌ | Conflicts with the specification | The current behaviour contradicts the specification and must change |
 
-### Not in Phase 2
+## Summary
 
-- **Physical plot:** there are no 3D display stands or world stations yet. Stands exist
-  only in the UI.
-- **Grading service and UI:** not built. The rules and config are ready.
-- **Pack stock and restock timers:** not built.
-- **Boosts, quests, daily rewards, offline earnings:** not built.
-- **Monetization purchase handling:** not built.
-- **Sound and music:** none yet.
-- **Final card and pack artwork:** placeholder tiles for now.
-
-## Phase 1: Foundation
-
-| Area | Status | Where |
-| --- | --- | --- |
-| Configuration (game, economy, rarities, variants, collections, cards, packs, grading, upgrades, monetization) | ✅ | `src/shared/Config/` |
-| Config cross-reference validation (tests + server startup warnings) | ✅ | `Logic/ConfigCheck.luau` |
-| Card registry: 36 original cards in 6 collections, with lookups | ✅ | `Config/Cards.luau`, `Logic/CardRegistry.luau` |
-| Unique card instance ids (`<userId>-<serial>`) | ✅ | `Logic/Inventory.luau` |
-| Player data schema v1, defaults, reconcile, versioned migrations | ✅ | `Data/ProfileSchema.luau` |
-| Session-locked persistence (retries, lock expiry, lost-lock detection, never resetting data on failure) | ✅ logic / 🟡 live | `server/Lib/SessionStore.luau` |
-| DataService (join/leave, autosave, BindToClose, Studio mock store, leaderstats) | 🟡 | `server/Services/DataService.luau` |
-| Starter rewards granted once (flag + session lock) | ✅ logic / 🟡 live | `Logic/Account.luau` |
-| Remotes with rate limiting and argument validation | ✅ validators and limiter / 🟡 wiring | `server/Lib/Net.luau`, `Util/Validate.luau`, `Util/RateLimiter.luau` |
-| Replication (snapshot, full-key changes, map patches) | 🟡 | `DataService`, `client/Controllers/DataController.luau` |
-| Settings (validated, persisted, Settings window) | ✅ logic / 🟡 UI | `SettingsService`, `SettingsController` |
-| HUD (cash, treats, income/s, level bar, navigation, notifications) | 🟡 | `client/Controllers/HUDController.luau`, `NotificationController.luau` |
-| Pure rules for economy, progression, collections, pack rolls and grading | ✅ | `src/shared/Logic/` |
-
-### Prepared but not yet used by gameplay
-
-These fields exist in the saved schema and/or config so that later phases need no
-migration. No gameplay uses them yet:
-
-- **Quests:** `Quests`.
-- **Daily rewards:** `DailyRewards`.
-- **Collection reward claims:** `Collections.Claimed`.
-- **Purchase receipts:** `Purchases.Receipts`.
-- **Monetization IDs:** all set to `0`, meaning disabled.
-- **Grading:** the rules and config are tested, but there is no grading service or UI.
-- **Volume settings:** stored, but the game has no audio yet.
-
-## Assumption register
-
-**The master specification has not been recovered** (see [SPEC.md](SPEC.md)). As a
-result:
-
-- **No assumption below is "confirmed by the original specification".** That category is
-  currently empty.
-- Requirements that come from the owner's phase briefs (R-x.y in SPEC.md) are not
-  assumptions, so they are not listed here.
-- Every entry is a design choice made by development, filling a gap.
-
-Classifications:
-
-- **Decision:** a reasonable implementation decision. A technical or UX choice that any
-  specification would most likely accept, or that follows directly from a brief
-  requirement.
-- **Unresolved:** an unresolved design decision. A game-design choice that only the owner or
-  the specification can settle. It works today, but may change.
-- **Deviation:** a deviation from the intended design. Available evidence (the reference
-  design direction, R-1.6.2) points to a different design. The reference shows another
-  game, so these deviations are provisional and are listed for an owner decision.
-
-"Migration" means what a change would require of saved player data (schema v1). See
-[Migration notes](#migration-notes).
-
-### Concept and scope
-
-| # | Current behaviour | Evidence | Class | Where | Migration if changed |
+| Spec area | ✅ | 🟡 | 🟠 | ⬜ | ❌ |
 | --- | --- | --- | --- | --- | --- |
-| A1 | Core loop: buy packs, get cards, put cards on stands for income, upgrade, collect sets | Proposed by development (R-2.1 had no scope); consistent with the reference | Unresolved | whole game | Depends on change |
-| A2 | Display stands exist only as a UI window; no physical plot or 3D stands | The reference shows a physical plot with stands in the world (shots 01, 14), and the brief calls the game a "tycoon" | **Deviation** (temporary; a physical plot was the proposed Phase 3) | `DisplayController`, `Logic/Display` | None: `Display` slots can drive 3D stands |
-| A3 | No trading, gifting or leaderboards (except a Cash leaderstat) | No source | Unresolved | — | None (instance ids are already globally unique) |
-| A4 | Game name "Ferret Card Tycoon"; ferret theme | R-0.1 | (requirement) | — | — |
+| §1–3 Concept, identity, core loop | 1 | 1 | 2 | 3 | 2 |
+| §4 Card system | 5 | 0 | 1 | 3 | 0 |
+| §5 Artwork | 2 | 1 | 1 | 1 | 0 |
+| §6 Rarity and drop tables | 6 | 0 | 3 | 3 | 1 |
+| §7 Pack shop and opening | 5 | 1 | 5 | 3 | 3 |
+| §8 Plots and stands | 2 | 0 | 0 | 5 | 1 |
+| §9 2D ferrets in the world | 0 | 0 | 0 | 7 | 0 |
+| §10 Income and offline earnings | 5 | 0 | 2 | 4 | 1 |
+| §11 Grader | 1 | 0 | 1 | 4 | 1 |
+| §12 Variants | 2 | 0 | 2 | 1 | 0 |
+| §13 Binders | 1 | 1 | 3 | 2 | 0 |
+| §14 Backpack | 0 | 3 | 3 | 2 | 1 |
+| §15 Upgrades | 3 | 0 | 2 | 0 | 1 |
+| §16 Boosts | 0 | 0 | 0 | 2 | 0 |
+| §17 Daily rewards and quests | 0 | 0 | 0 | 2 | 0 |
+| §18 World and hub | 0 | 0 | 0 | 3 | 0 |
+| §19 Selling | 3 | 1 | 2 | 1 | 0 |
+| §20 Trading | 0 | 0 | 0 | 1 | 0 |
+| §21 Leaderboards and achievements | 0 | 0 | 1 | 1 | 0 |
+| §22 Events | 0 | 0 | 0 | 1 | 0 |
+| §23 Robux monetization | 1 | 0 | 0 | 4 | 1 |
+| §24–25 UI and audio | 1 | 1 | 3 | 2 | 1 |
+| §26–29 Architecture, security, persistence, performance | 8 | 3 | 1 | 4 | 1 |
+| §30–33 Process, testing, balancing, deliverables | 6 | 0 | 5 | 2 | 2 |
+| **Total** | **52** | **12** | **37** | **61** | **16** |
 
-### Cards and collections
+**In short:**
 
-| # | Current behaviour | Evidence | Class | Where | Migration if changed |
-| --- | --- | --- | --- | --- | --- |
-| A5 | 36 original cards in 6 collections of 6 (Backyard Burrow, Snack Attack, Knight Patrol, Sandy Shores, Cosmic Scampers, Midnight Mischief); all names and descriptions invented | R-1.2 asks for ≥30 original cards; the content is invented | Unresolved | `Config/Cards`, `Config/Collections` | Adding cards: none. Renaming display names: none. **Removing or renaming card ids: required** (remap owned instances and `Discovered`) |
-| A6 | "Species" = ferret colour morphs (Sable, Albino, Champagne, …, plus Polecat); cosmetic only, no gameplay effect | R-1.2 requires the field; its meaning is undefined | Unresolved | `Config/Cards.Species` | None (not stored in player data) |
-| A7 | 7 rarities: Common, Uncommon, Rare, Epic, Legendary, Mythic, Secret | Partly matches the reference (Common to Epic visible); the tiers above Epic are invented | Unresolved | `Config/Rarities` | None (rarity is per definition, not stored per instance) |
-| A8 | 5 variants that multiply income and sale value: Normal ×1, Shiny ×1.5, Gold ×3, Holo ×6, Rainbow ×12; drop weights 1000/60/15/4/1 | R-1.2 requires variants. The reference shows Gold, Holo and Rainbow tags (shot 16) and a "Shiny" boost; all multipliers and weights are invented | Unresolved | `Config/Variants` | Changing multipliers or weights: none. **Removing or renaming a variant id: required** (remap `Cards[*].Variant` and `Discovered[*].Variants`) |
-| A9 | Unlock requirements on 3 cards (level 10, level 14, level 16 plus Backyard Burrow complete); locked cards cannot drop | R-1.2 requires the field; which cards are gated is invented | Unresolved | `Config/Cards` | None |
-| A10 | Completing a collection gives a permanent global income bonus (+5% to +15%) | The reference shows binder bonuses as **luck** (shot 11); ours are **income** | Unresolved (differs from the reference) | `Config/Collections`, `Logic/Collections` | None (derived from `Discovered`) |
-| A11 | Artwork: an empty asset id shows a placeholder tile (rarity gradient plus species initials) | R-1.2 asks for configurable placeholders | Decision | `UI/CardTile` | None |
-| A12 | Card ids are permanent; retired cards stay defined but are removed from packs | Required for data safety (R-1.4) | Decision | `Config/Cards` header | — |
+- **Strong:** the foundation. Data-driven config, the card registry, server authority,
+  validated remotes, session-locked persistence, the centralised income formula and the
+  upgrade cost formula.
+- **Missing:** the spec's defining features. Physical plots and stands, 2D ferret
+  illustrations in the 3D world, collectable and offline income, the Grader Station, boosts,
+  quests, daily rewards, the store and trading.
+- **Contradicting the spec:** 16 earlier decisions, listed in
+  [Conflicts](#conflicts-with-the-specification).
 
-### Packs
+---
 
-| # | Current behaviour | Evidence | Class | Where | Migration if changed |
-| --- | --- | --- | --- | --- | --- |
-| A13 | **Packs open immediately on purchase**; there is no unopened-pack inventory | The reference shows packs as backpack items ("Packs" filter, "No packs yet", "Tap or swipe to open", shots 06, 08 and 10) | **Deviation** | `Logic/PackShop`, `PacksController` | Additive: a new `Packs` map in the schema; `reconcile` adds it automatically (bump the version only if existing data needs transforming) |
-| A14 | 3 cards per pack | The reference reveal shows 5 cards (shot 07) | Unresolved (differs from the reference) | `Config/Packs.CardsPerOpen` | None |
-| A15 | 6 packs, one per collection; rarity weights per pack | Invented | Unresolved | `Config/Packs` | None |
-| A16 | Pack prices 750 / 20K / 125K / 1M / 15M / 200M Cash (about 15 minutes of per-card income), gated by level 1/3/5/8/11/14 | Tuned with `scripts/simulate.luau`; no design target exists | Unresolved | `Config/Packs` | None |
-| A17 | No stock limits or restock timers | The reference shows stock counts and a restock countdown (shot 04) | Unresolved (differs from the reference) | — | Additive if added |
-| A18 | Odds shown as "1 IN X" per card and as a "chase" card in the shop | The reference shows "1 IN X" (shots 01, 05, 07) | Decision | `PackRoller.odds`, `PacksController` | None |
-| A19 | Up to 10 packs per purchase | Invented (abuse limit) | Decision | `Config/Game.Limits` | None |
+## §1–3 Concept, visual identity, core loop
 
-### Economy and progression
+| Req | Requirement (spec) | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §1 | All player-facing text in English; consistent English naming | ✅ | All strings and identifiers are in English |
+| §2 | Ferrets, original content, nothing copied from the reference game | 🟡 | 36 original ferret cards. Screenshots used for layout only (`docs/reference-screenshots/README.md`) |
+| §2 | Reusable design system: palette, typography, buttons, card frames, rarity colours, modals, **tooltips**, notifications, progress bars, currency displays, **loading states**, hover/selection | 🟠 | `UI/Theme`, `UI/Components`, `UI/CardTile`, `UI/Windows`. No tooltips, no loading states |
+| §3.1–2 | Join, then **claim a personal plot** | ⬜ | No plots exist |
+| §3.3 | Starter currency **and starter card packs** | ❌ | Grants 1,500 Cash plus two starter **cards** placed on stands. The spec says starter **packs**, and $500 (§32). See C5 |
+| §3.4–6 | Open packs, discover cards, place on stands | 🟠 | Packs and cards work. Stands are a UI list, not on a plot |
+| §3.7 | Spawn the illustrated ferrets in the world | ⬜ | See §9 |
+| §3.8–9 | Earn passive income, **then collect accumulated earnings** | ❌ | Income is credited straight to Cash every second; there is nothing to collect. See C4 |
+| §3 | Guided, resumable tutorial | ⬜ | No tutorial, and no tutorial field in saved data |
 
-| # | Current behaviour | Evidence | Class | Where | Migration if changed |
-| --- | --- | --- | --- | --- | --- |
-| A20 | Two currencies: **Cash** (main) and **Treats** (secondary) | R-1.6.1 mentions "relevant currency values". The reference has a second currency ("Kibble"); the name "Treats" is invented | Unresolved | `Config/Economy.Currencies` | **Renaming Treats: required** (move the `Currency.Treats` balance to the new key) |
-| A21 | **Treats are earned (5 per level) but nothing spends them** | Gap: no sink is designed | Unresolved (**needs a decision**) | `PackShop`, `Config/Economy` | None until a sink exists |
-| A22 | Starter bundle: 1,500 Cash plus two Common Backyard Burrow cards, placed on stands automatically; granted once | R-1.4 requires duplicate protection; the contents are invented | Unresolved (contents) / Decision (mechanism) | `Config/Economy`, `Logic/Account` | Changing contents: none for existing players (`Flags.StarterGranted` is already set) |
-| A23 | Income comes only from displayed cards: Σ(base × variant × grade) × (1 + income upgrade + collection bonuses), every 1 s; no offline or AFK income | The reference shows "Cash/s" and a "2x AFK time" pass (shot 18), implying AFK income | Unresolved | `Logic/Economy`, `EconomyService` | Offline income: additive (needs a `LastIncomeAt` field) |
-| A24 | Base sale value = 15 × base income; sold value includes variant, grade and the sell upgrade | Invented | Unresolved | `Config/Cards`, `Logic/Economy` | None |
-| A25 | Selling is all-or-nothing; favourite and displayed cards cannot be sold | Protects players; no source | Decision | `Logic/Market` | None |
-| A26 | Player level and XP: XP per pack (5–65), XP to next level = 60·L^1.6, max level 100; levels gate packs and reward Treats | The reference shows "LV 4" (shot 01); everything else is invented | Unresolved | `Config/Economy.Progression`, `Config/Packs.Xp` | None (but changing the curve changes existing players' effective progress) |
-| A27 | 4 base stands, plus up to 8 from upgrades; backpack holds 300 base, plus up to 500 | The reference shows a "45/425" backpack (shot 08); the numbers are invented | Unresolved | `Config/Game`, `Config/Upgrades` | **Lowering capacity: required decision** for players already above it (they keep their cards but can't add more) |
-| A28 | 5 upgrades: Display Stands, Cosy Hammocks (+10% income), Lucky Paw (+5% luck), Haggler (+8% sale), Bigger Backpack (+50); cost = base × growth^level | R-1.1 requires upgrade config; the list is invented | Unresolved | `Config/Upgrades` | **Removing or renaming an upgrade id: required** (refund or remap `Upgrades[id]`) |
-| A29 | Luck multiplies the weights of luck-affected rarities and variants by (1 + luck) | Invented model | Unresolved | `Logic/PackRoller` | None |
-| A30 | "Place Best" fills stands with the highest-income cards | The reference has a "PLACE BEST" button (shot 01) | Decision | `Logic/Display` | None |
+## §4 Card system
 
-### Grading, quests, daily rewards, monetization (config only)
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §4.1 | Separate definition id and unique per-copy id | ✅ | `CardId` plus instance id `<userId>-<serial>`. Tests: `Inventory.spec` |
+| §4.2 | Data-driven definitions in a centralised registry | ✅ | `Config/Cards`, `Logic/CardRegistry`. Tests: `CardRegistry.spec`, `Config.spec` |
+| §4.3 | Definition fields: CardId, DisplayName, Description, Species, Rarity, BaseIncomePerSecond, BaseSellValue, ArtworkAssetId, CollectionId, UnlockRequirements, VariantDefinitions | ✅ | Present under our names: `Id`, `Name`, `BaseIncome`, `BaseSaleValue`, `Artwork`, `Collection`, `Unlock`, `Variants` |
+| §4.3 | Definition fields **PackPool, DisplayModel/display config, IsLimited, AvailableGrades, Tags** | ⬜ | Missing. The pack pool is derived from the collection |
+| §4.4 | Instance fields: UniqueInstanceId, CardId, Variant, Grade, Favorite, acquisition time | ✅ | `Types.CardInstance` |
+| §4.4 | Instance "is displayed" and display slot | ✅ | Derived from `Display` (slot → instance). This prevents double-display by construction. Tests: `Gameplay.spec` |
+| §4.4 | Optional serial number for special collectibles | ⬜ | Field not present (it can be added without a migration) |
+| §4.5 | Inventory: view all, details, favourite, select, select for display, variant info, sell eligible, inspect | 🟠 | Present in `BackpackController`, but not verified in Studio |
+| §4.5 | Inventory: **search by name, filter by rarity, sort by grade, duplicate quantities, select for grading** | ⬜ | Missing. Sorting is by recent, rarity or income only. Each copy gets its own tile, with no grouping |
 
-| # | Current behaviour | Evidence | Class | Where | Migration if changed |
-| --- | --- | --- | --- | --- | --- |
-| A31 | Grading: four sub-grades (Corners, Centering, Surface, Edges), each 1–10; grade = floor(average); multipliers ×0.8 (grade 1) to ×3 (grade 10); cost = 50 + 0.5 × sale value. No service or UI | R-1.1 requires grading config. The sub-grade names follow the reference (shot 02); the formula and multipliers are invented | Unresolved | `Config/Grading`, `Logic/Grading` | None yet: no card has been graded, and `Grade` is nil for every instance |
-| A32 | Quests and daily rewards: reserved empty fields only | R-1.3 requires the fields; the design is missing | Unresolved | `ProfileSchema` | Restructuring the reserved fields: none while they're empty |
-| A33 | Monetization placeholders: VIP (+25% income), 2× Income, Triple Open, two Treats bundles; all `Id = 0` (disabled) | R-1.1 requires placeholders; the product ideas are partly from the reference (shots 17–18) | Unresolved | `Config/Monetization` | None while disabled |
+## §5 Ferret artwork and card design
 
-### Technical and UX decisions
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §5.1 | At least 30 original card definitions | ✅ | 36. Test: `Config.spec` |
+| §5.2 | Distinct artwork per character; don't use the same image for every card | 🟠 | No art exists. Placeholder tiles vary only by rarity colour and species initials, so cards of the same species and rarity look alike |
+| §5.3 | Don't pretend final art exists; artwork references are configurable | ✅ | `Artwork = ""` plus a placeholder renderer. An asset id swaps in without code changes |
+| §5.4 | Rarity labels, readable income, optional flavour text on cards | 🟡 | `CardTile` shows the name, rarity and income/s. The description appears in the backpack detail |
+| §5.5 | Special visual treatments for rare variants | ⬜ | A text tag only |
 
-| # | Current behaviour | Evidence | Class | Where |
+## §6 Rarity system and drop tables
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §6.1 | Seven tiers: Common to Secret | ✅ | `Config/Rarities` matches exactly |
+| §6.2 | Configurable colours, as suggested | ✅ | Matches the suggestions (grey, green, blue, purple, gold, magenta-red, dark) |
+| §6.3 | Per-rarity border and background | 🟠 | Tile colour and gradient by rarity. No distinct borders |
+| §6.4 | Per-rarity opening-animation intensity, sound, particles, "collection value" | ⬜ | None |
+| §6.5 | Drop tables per pack, not scattered | ✅ | `Config/Packs.RarityWeights`. Tests: `PackRoller.spec` |
+| §6.6 | Validate probabilities; handle missing definitions safely | ✅ | `Logic/ConfigCheck` (tests plus server startup) |
+| §6.7 | Weighted random; variants; deterministic seed for tests | ✅ | `WeightedRandom`, `PackRoller` (injected `roll`). Tests |
+| §6.8 | Limited pools, special events, guaranteed rewards | ⬜ | Not supported |
+| §6.9 | Log acquisition events for debugging | ⬜ | Not logged |
+| §6.10 | Secret cards obtainable (never impossible by misconfiguration) | 🟠 | ConfigCheck verifies every card can be reached from some pack. It doesn't check that a non-zero probability survives unlock gating |
+| §6.11 | Developer tools to test pack probabilities | 🟠 | `PackRoller.odds` plus a distribution test and `scripts/simulate.luau` (offline). No in-game developer tool |
+| §6.12 | Rewards generated and validated on the server only | ✅ | `PackService` with server `Random`. The client only receives the results |
+| §6/§32 | Income determined by rarity (§32 bands) | ❌ | Income scales by **collection tier** (×1 to ×12,000), not by rarity band. See C10 |
+
+## §7 Pack shop and opening
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §7.1 | Dedicated shop; buy with in-game currency | 🟡 | `PacksController` plus `BuyPack` |
+| §7.2 | Pack fields: name, description, price, currency, card pool, rarity probabilities | ✅ | `Config/Packs`. Tests |
+| §7.2 | Pack fields: artwork, pity/guarantee, stock/availability, limited-time window | ⬜ | Missing |
+| §7.3 | Buy one or many; quantity selection | ✅ | 1–10 per request. Tests: `Gameplay.spec` |
+| §7.3 | Inventory capacity validation | ✅ | `PackShop.buy`. Test |
+| §7.3 | Affordability indicators | ❌ | Pack buy buttons stay green when unaffordable (only upgrade buttons grey out). See C15 |
+| §7.3 | Success / insufficient-currency notifications | 🟠 | The reveal screen, plus an error toast via `Request`. Neither is verified in Studio |
+| §7.3 | Purchase confirmation where appropriate | ⬜ | None |
+| §7.3 | Restock timers, limited-time packs, event packs | ⬜ | None |
+| §7.3 | Pack previews, possible rewards, reward odds | 🟠 | The shop row shows the found count and **one** chase card's odds. There is no full card list or odds table |
+| §7.4 | Never charge if the purchase can't complete | ✅ | All checks run before `Wallet.spend`. Test: "rejects … without changes" |
+| §7.4 | Never grant twice for a repeated request | 🟠 | Client drops concurrent duplicates (`Lib/Request`), plus a server rate limit. No server-side transaction id (C16) |
+| §7.5 | Opening sequence: pack centred, blur, pack animation, open with particles and sound, card flip, rarity effects, name and income reveal | ❌ | Packs open instantly into a pop-in grid of finished cards. No pack object, blur, flip, particles or sound. See C2 |
+| §7.5 | Open several packs in succession; clean results screen | 🟠 | The multi-pack results grid exists; there is no one-by-one sequence |
+| §7.5 | Option to reduce or skip repeated animations | 🟠 | The Reduced Motion setting skips pop-in tweens. There's no dedicated skip option |
+| §7.5 | Reward granted by the server before the client shows the result | ✅ | Results come from the `BuyPack` response |
+| §3/§7 | Owned, unopened packs (starter packs; packs as rewards in §13 and §17) | ❌ | No pack inventory: packs can only be bought and opened at once. See C1 |
+
+## §8 Personal plots and display stands
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §8.1 | Physical personal plot in a shared world | ⬜ | No world geometry at all (the place is empty apart from scripts) |
+| §8.2 | Unique ownership; claim and release; ownership indicators; owned vs unowned distinction | ⬜ | — |
+| §8.3 | Customisable decoration | ⬜ | — |
+| §8.4 | Multiple **physical** stands; small initial number; more via progression and upgrades | ❌ | The stand **count** logic exists (4 base plus the upgrade, `Economy.displaySlotCount`), but stands are UI slots, not world objects. See C3 |
+| §8.5 | Approach a stand → interact → select card → place → see it physically → remove/replace → collect income | ⬜ | Only the UI flow exists (My Stands window and Backpack) |
+| §8.6 | The same card can't be on two stands | ✅ | `Display.place` moves the card. Test |
+| §8.7 | Server-validated placement; arrangement saved and restored on rejoin | ✅ | `CardService`, saved `Display`, `Display.sanitize` (tests). Rejoin is untested in Studio |
+| §8.8 | Visitors can inspect; no modification without permission | ⬜ | No plots to visit (remotes only touch the caller's own data, so cross-player modification is impossible today) |
+
+## §9 2D ferret illustrations in the 3D world (spec: "one of the most important features")
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §9.1 | The ferret illustration appears above or near the stand when a card is placed | ⬜ | Not implemented |
+| §9.2 | Faces the viewer, keeps its aspect ratio, transparent background, readable at distance | ⬜ | — |
+| §9.3 | Stays tied to its stand; updates on replace; disappears on removal | ⬜ | — |
+| §9.4 | Subtle idle animation (float, bounce, sway) | ⬜ | — |
+| §9.5 | Rarity effects: Rare blue particles, Epic purple glow, Legendary gold sparkles, Mythic aura, Secret unique; lightweight and configurable | ⬜ | — |
+| §9.6 | Responds to interactions | ⬜ | — |
+| §9.7 | World stays clear with many full plots; limit effects at distance | ⬜ | — |
+
+## §10 Passive income and offline earnings
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §10.1 | Displayed cards generate income; base income per second per card | ✅ | `Economy.cardIncome` and `totalIncome`. Tests |
+| §10.2 | Centralised formula: Base × Variant × Grade × Upgrade × Boosts (+ Game Pass, events) | 🟠 | One formula in `Logic/Economy` (variant × grade × (1 + upgrade + collection bonus) × `extra`). Boosts, Game Pass and event multipliers are only a hook (`EconomyService:ExtraMultiplier` returns 1) |
+| §10.3 | No double-applied multipliers; no income maths in other scripts | ✅ | Client and server both call `Logic/Economy`. Tests |
+| §10.4 | Server is the source of truth | ✅ | `EconomyService` on the server |
+| §10.5 | Understandable **collection** of earnings: stands accumulate and are collected by interaction, or a central collector | ❌ | Auto-credited every second; nothing accumulates or is collected. See C4 |
+| §10.6 | Inspect a displayed card: name, rarity, grade, base and effective income, **accumulated earnings**, bonuses | 🟠 | The detail panel shows name, rarity, variant and income. No accumulated earnings or bonus breakdown |
+| §10.7 | Collection animations and floating currency indicators | ⬜ | — |
+| §10.8 | No negative balances, duplicated payouts or client-awarded currency; every transaction validated; no client elapsed time | ✅ | `Wallet` (tests); server-only income; no client time |
+| §10.9 | Avoid frequent DataStore writes | ✅ | Currency is saved only on autosave or leave |
+| §10.10 | Offline earnings from the saved timestamp, capped | ⬜ | No timestamp field, no calculation |
+| §10.11 | Game Pass extends offline duration (server-side) | ⬜ | — |
+| §10.12 | Communicate offline limits to the player | ⬜ | — |
+
+## §11 Card Grader Station
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §11.1 | Physical Grader Station in the world | ⬜ | — |
+| §11.2 | Submit a card and pay a fee; the server randomly assigns grade 1–10 | ⬜ | No `GradingService` or remote. `Grade` exists on instances (always nil) |
+| §11.3 | UI: card, current grade, cost, possible grades, **grade probabilities**, income per grade, value, risk info, Roll button, change card, animation | ⬜ | — |
+| §11.4 | Configurable **probability table per grade**; per-category rules possible | ❌ | `Config/Grading` instead rolls four sub-grades and averages them (a model taken from the reference screenshots). It has no direct per-grade probability table. See C7 |
+| §11.5 | Centralised grade multiplier table | ✅ | `Config/Grading.Multipliers`, `Economy.gradeMultiplier`. Tests |
+| §11.6 | Multiplier values (spec suggestion: 0.8, 0.9, 1.0, 1.1, 1.2, 1.4, 1.7, 2.1, 2.7, 3.5) | 🟠 | Ours: 0.8, 0.85, 0.9, 0.95, 1, 1.1, 1.2, 1.5, 2, 3. The spec calls its values suggestions; see [config differences](#configuration-differences) |
+| §11.7 | Atomic: affordability, ownership, displayed-card rule, no duplicate charge, result persisted, no free reroll by rejoining | ⬜ | The service doesn't exist. Only the pure helpers (`Logic/Grading` cost and grade) are tested |
+
+## §12 Card variants
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §12.1 | Variants per instance, data-driven, without a definition per combination | ✅ | `Config/Variants` plus `CardInstance.Variant`. Tests |
+| §12.2 | Variant list: Normal, Gold, Rainbow, Shiny, Holographic, Crystal, Shadow, Prismatic, Limited Edition | 🟠 | 5 of 9: Normal, Shiny, Gold, Holo(graphic), Rainbow. Missing: Crystal, Shadow, Prismatic, Limited Edition |
+| §12.3 | Not every card needs every variant | ✅ | Optional `Variants` list per card. Test |
+| §12.4 | Variants affect appearance (gold frame, animated rainbow, holo overlay, …) | ⬜ | A coloured text tag only |
+| §12.5 | Add variants without rewriting systems | 🟠 | Config-driven, but visuals will need a variant-treatment table |
+
+## §13 Binders and collection completion
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §13.1 | Binders as lists of required card definitions | ✅ | `Config/Collections` plus the card `Collection` field. Tests: `Progression.spec` |
+| §13.2 | UI: name, completion count, discovered and missing cards | 🟡 | `BinderController` (unknown cards show "?") |
+| §13.2 | UI: binder artwork, percentage, rewards list | 🟠 | The completion bonus is shown. No artwork, no percentage, no reward list |
+| §13.3 | Rewards (cash, packs, variants, decorations, titles, badges, income bonus, display slots) granted **once**, server-validated, persisted | 🟠 | Only a permanent income bonus, derived from `Discovered`, so it can't be double-granted. No claimable rewards (`Collections.Claimed` is reserved). See C6 |
+| §13.4 | Global collection interface plus individual binder pages | 🟠 | Overall count plus per-collection tabs |
+| §13.5 | Filters: completed, incomplete, recently discovered, rare collections | ⬜ | — |
+| §13.6 | Notification when a new card advances a binder | ⬜ | Only the NEW! badge on the reveal screen |
+
+## §14 Backpack
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §14.1 | Grid, previews, rarity, income, variant indicators, favourite, inspection panel | 🟡 | `BackpackController` |
+| §14.1 | Search bar, filter controls, card counts, grade indicators | ⬜ | — |
+| §14.1 | Sorting controls | 🟠 | Recent, rarity and income. No grade sort |
+| §14.2 | Keyboard, mouse and touch | 🟠 | Mouse and touch through buttons. No keyboard shortcuts |
+| §14.3 | Responsive at different resolutions | 🟡 | `Components.autoScale` |
+| §14.4 | Large collections must not render every card at once (pagination or virtual scrolling) | ❌ | Renders a tile for every owned card, and rebuilds them all on every change. See C11 |
+| §14.5 | Distinguish displayed, favourite and sellable | 🟡 | ON STAND and FAV tags; Sell greys out |
+| §14.5 | Distinguish gradeable and collection-needed | ⬜ | — |
+| §14.6 | Explain why an action is blocked | 🟠 | The server returns a reason, shown as a toast. The UI doesn't explain *before* the attempt |
+
+## §15 Upgrades
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §15.1 | Upgrade fields: id, name, description, level, max level, base cost, scaling, effect per level, validation, UI | ✅ | `Config/Upgrades`, `UpgradeShop`. Tests |
+| §15.2 | `NextCost = BaseCost × CostMultiplier ^ CurrentLevel`, centralised and tested | ✅ | `Economy.upgradeCost`. Test |
+| §15.3 | Max level enforced; no negative levels; server-validated; persisted | ✅ | Tests: `Gameplay.spec` |
+| §15.4 | The 10 initial upgrades | 🟠 | Implemented with spec equivalents: Cash Multiplier (`IncomeBoost`), Card Display Capacity (`DisplaySlots`), Pack Luck (`Luck`), Inventory Capacity (`BackpackSpace`). **Missing:** Plot Capacity, Offline Earnings, Grading Discount, Income Collection Radius, Automatic Collection, Pack Opening Speed |
+| §15 | No upgrades outside the specified set | ❌ | Extra `SellBonus` ("Haggler") upgrade, not in the spec's list. See C13 |
+| §15.5 | No single upgrade trivialises the game | 🟠 | Pacing was simulated (`scripts/simulate.luau`) against our own targets, not the spec's (§32) |
+
+## §16 Boosts
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §16.1 | Luck, Super Luck, Cash, Shiny, Grading and Speed boosts | ⬜ | Nothing exists. Hooks: the `extra` multiplier in `Economy`, and `luck` in `PackRoller` |
+| §16.2 | Duration, effect, source, stacking rules, remaining time; server timing; stop on expiry; persist when appropriate | ⬜ | — |
+
+## §17 Daily rewards and quests
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §17.1 | Daily rewards: configurable sequence, duplicate-claim protection, server timestamps, consistent across time zones | ⬜ | Reserved `DailyRewards { LastClaimDay, Streak }` only |
+| §17.2 | Quests: id, description, objective, progress, reward, completion, claim, optional expiry; server-event driven; completion notifications | ⬜ | Reserved `Quests { Active, Completed }` only. There is no claim state in the schema yet |
+
+## §18 Game world and social hub
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §18.1 | Areas: Spawn Plaza, Pack Shop, Grader, Trading Plaza, Upgrade Station, Daily Rewards, Event, Leaderboards, Player Plots, Collection Hall | ⬜ | No world |
+| §18.2 | Navigable without menus; signs; interactive stations | ⬜ | Everything is menu-driven |
+| §18.3 | Plots show owner, displayed cards, income, decorations, prestige; visitors can inspect; quick return to your own plot | ⬜ | — |
+
+## §19 Selling
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §19.1 | Sell eligible cards for in-game currency, server-valued | ✅ | `Market.sell`. Tests |
+| §19.2 | Show name, rarity, grade, variant and estimated value | 🟡 | The detail panel shows everything except grade (no grades exist yet) |
+| §19.3 | Confirmation before selling valuable cards | ⬜ | Sells on one click |
+| §19.4 | Displayed cards handled safely; locked cards can't be sold during an operation | 🟠 | Displayed and favourite cards are protected (tests). No operation locks exist (needed once grading and trading arrive) |
+| §19.5 | Duplicate sale requests prevented | ✅ | All-or-nothing: a repeat finds the card gone and fails. Test |
+| §19.6 | Centralised valuation (base, rarity, variant, grade, limited) | 🟠 | `Economy.cardSaleValue` covers base, variant, grade and the sell upgrade. No "limited" factor |
+| §19.7 | Favourite protection | ✅ | Test |
+
+## §20 Trading
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §20 | Two-sided accept and confirm; changes invalidate confirmations; ownership re-check; locks; atomic; timeouts; anti-duplication | ⬜ | Not started. The spec says to build it after the core systems are stable. Globally unique instance ids are ready |
+
+## §21 Leaderboards and achievements
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §21.1 | Leaderboards: Total Cash Earned, Income/s, Cards Discovered, Binder Completion, Highest Grade, Rare Cards | 🟠 | Only an in-server `leaderstats.Cash` showing **current** cash. `Stats.CashEarned` is tracked but not shown. No global leaderboards |
+| §21.2 | Achievements with one-time rewards | ⬜ | — |
+
+## §22 Limited-time events
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §22 | Config-driven events with server-checked start and end, event packs, cards, variants, currency, quests | ⬜ | — |
+
+## §23 Robux monetization
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §23.1 | Configurable product ids; never invent real ids; placeholders | ✅ | `Config/Monetization`: every `Id = 0` (disabled) |
+| §23.2 | Developer products via idempotent `ProcessReceipt` with persisted transaction state | ⬜ | `Purchases.Receipts` is reserved; there's no handler |
+| §23.3 | Game Pass ownership verified and benefits applied on the server | ⬜ | — |
+| §23.4 | Store UI (icon, name, description, price, benefits, buy, feedback); free vs paid clearly separated | ⬜ | — |
+| §23.5 | Compliance for paid random items (odds, regional rules) | ⬜ | No paid random items exist yet |
+| §23.6 | Placeholder catalogue follows the suggested products (Cash bundles, boosts, passes) | ❌ | `TreatsSmall` and `TreatsLarge` sell a currency the spec doesn't define. See C9 |
+
+## §24–25 UI, UX and audio
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §24.1 | TOP AREA: cash, income/s, currencies, Pack Shop, Plot, event indicator | ❌ | Cash, income/s and currencies sit on the **left-middle**, following the reference. Pack Shop and stands buttons are at the top. No event indicator. See C12 |
+| §24.2 | SIDE NAV: Backpack, Binders, Grader, Upgrades, Boosts, Shop, Quests, Settings | 🟠 | Has Backpack, Binder, Upgrades and Settings. Missing Grader, Boosts, Shop and Quests |
+| §24.3 | Contextual modals; one panel at a time | 🟡 | `UI/Windows` (single-window manager) |
+| §24.4 | Desktop, mobile, tablet, aspect ratios, mouse, touch, keyboard shortcuts | 🟠 | Viewport scaling, mouse and touch. No keyboard shortcuts. Not verified on devices |
+| §24.5 | Settings: music, SFX, reduced effects, reduced screen shake, animation skipping, interface scale | 🟠 | Has music, SFX, reduced motion and notifications. Missing screen shake, animation skip and UI scale |
+| §25.1 | Audio and visual feedback for key actions | ⬜ | No sounds. Visual feedback is limited to toasts and the reveal pop-in |
+| §25.2 | Configurable audio references with placeholders and a documented setup | ⬜ | No sound system |
+| §25.3 | Reduced-effects setting | ✅ | `Settings.ReducedMotion` (validated and persisted; test) |
+
+## §26–29 Architecture, security, persistence, performance
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §26.1 | Modular server, client, shared, config and UI separation | ✅ | Matches the suggested layout under different names (`DataService` = PlayerDataService, `EconomyService` = IncomeService, `Logic/*` = utilities). `ARCHITECTURE.md` |
+| §26.2 | No authoritative logic in LocalScripts; clients can't modify server data | ✅ | The client only mirrors data |
+| §27.1 | Server controls currency, ownership, rewards, placement, upgrades and selling | ✅ | Each one has a validated, server-side transaction. Tests |
+| §27.1 | Server controls grades, collection rewards, daily rewards, boosts, trading and paid rewards | ⬜ | Those systems don't exist yet |
+| §27.2 | Validate every remote input: identifiers, quantities, currency, capacity, card availability | ✅ | `Util/Validate` plus the per-transaction checks. Tests: `Util.spec`, `Gameplay.spec` |
+| §27.2 | Validate plot ownership, operation state and transaction uniqueness | ⬜ | No plots, operations or transaction ids yet |
+| §27.3 | Rate limiting on important remotes | ✅ | `Lib/Net` token buckets. Tests: `Util.spec` |
+| §27.4 | No arbitrary paths or functions in remotes; safe failures; logging of suspicious requests | 🟡 | Fixed remote set; `warn` on invalid requests; generic client errors |
+| §28.1 | Saved data: currency, cards, display, upgrades, discovered cards, binder progress, daily, quests, settings, stats, schema version | ✅ | `ProfileSchema` v1. Tests |
+| §28.1 | Saved data: **eligible active boosts, last offline-income timestamp** | ⬜ | Missing (additive; see [migrations](#data-migrations)) |
+| §28.2 | Protected calls, retries on temporary failures, session locking, UpdateAsync, schema version and migration, safe loading, no duplicate default rewards, never default after a failed load | ✅ | `Lib/SessionStore`. Tests: `SessionStore.spec` (14 cases, mutation-checked). Never run against the real DataStoreService |
+| §28.3 | Periodic, leave and shutdown saves | 🟡 | `DataService` (autosave loop, PlayerRemoving, BindToClose). Not verified in Studio |
+| §28.4 | Diagnostic logging | 🟡 | `SessionStore` logs retries, contested and expired locks, rejections and repairs |
+| §29.1 | Centralised income scheduler (not a loop per card) | ✅ | One `EconomyService` loop |
+| §29.2 | Don't rebuild whole interfaces when one value changes | ❌ | The Backpack, Stands and Binder windows rebuild every tile on any change while open. See C11 |
+| §29.3 | Limit effects at distance; clean up objects and connections | ⬜ | No world objects yet |
+| §29.4 | Usable on lower-end devices | 🟠 | Not measured. The UI scales, but full rebuilds (C11) will hurt large inventories |
+
+## §30–33 Process, testing, balancing, deliverables
+
+| Req | Requirement | Status | Evidence / gap |
+| --- | --- | --- | --- |
+| §30.1 | Inspect the tools; Rojo workflow; honest about Studio testing | ✅ | `PHASE0_REPORT.md`, `README.md`, `TESTING.md` |
+| §30.2 | Phase order: the spec's Phase 2 includes **plot claiming, display stands, 2D illustrations** | ❌ | Our "Phase 2" shipped packs, inventory and UI-only stands, and skipped plots and illustrations. Its Phase 3 items (upgrades, binders, selling) were started early. See C14 |
+| §31.1 | Card system tests: valid ids, rarities, pack references, variants | ✅ | `Config.spec`, `CardRegistry.spec` |
+| §31.2 | Pack tests: correct deduction, failed purchase charges nothing, exact reward, invalid ids rejected, repeated requests | 🟠 | All present (`Gameplay.spec`, `Util.spec`) except server-side duplicate-request idempotency |
+| §31.3 | Inventory tests: unique ids, duplicates, capacity, invalid references | ✅ | `Inventory.spec` |
+| §31.4 | Plot tests | 🟠 | Double-display and removal (`Gameplay.spec`). No plot ownership or rejoin tests |
+| §31.5 | Income tests: multipliers, no duplication, collection exploit, offline limits | 🟠 | Multipliers only. Collection and offline income don't exist |
+| §31.6 | Grading tests | 🟠 | Pure helpers only |
+| §31.7 | Upgrade tests | ✅ | `Gameplay.spec`, `Economy.spec` |
+| §31.8 | Persistence tests | ✅ | `SessionStore.spec`, `ProfileSchema.spec` |
+| §31.9 | Monetization and trading tests | ⬜ | Systems don't exist |
+| §31.10 | Development-only test mode or commands, not exploitable in production | ⬜ | None in game. `scripts/simulate.luau` is offline only |
+| §32 | Initial balancing (starting cash $500, starter pack $100, free basic stand, rarity income bands) | ❌ | See [config differences](#configuration-differences) (C5, C10) |
+| §33.1 | Deliverables: README, how to run in Studio, changelog, remaining tasks | ✅ | `README.md`, `DEVLOG.md`, this file |
+| §33.2 | Guides: card creation, pack config, grading config, monetization config, DataStore testing, new artwork, new cards, new collection sets | 🟠 | DataStore testing is in `TESTING.md`; config conventions are in `ARCHITECTURE.md`. The dedicated guides are missing |
+
+---
+
+## Conflicts with the specification
+
+These are earlier decisions that contradict the specification. Each needs a code or config
+change. **No working system was changed during this audit.** The fixes are scheduled in
+[ROADMAP.md](ROADMAP.md).
+
+| # | Current behaviour | Spec | Recommended change | Data migration |
 | --- | --- | --- | --- | --- |
-| A34 | Card instance id `<userId>-<serial>` from a persistent per-player counter | Satisfies R-1.2 | Decision | `Logic/Inventory` |
-| A35 | Session lock with a 10-minute expiry, autosave every 90 s, retries with backoff, kick on failed load, newer-schema data refused | Satisfies R-1.4 | Decision | `Config/Game.Data`, `Lib/SessionStore` |
-| A36 | In-memory mock store in Studio when API access is off (warns loudly) | Testing convenience | Decision | `DataService` |
-| A37 | Per-remote token-bucket rate limits; strict argument validators | Satisfies R-1.5 | Decision | `Config/Game.RateLimits`, `Lib/Net` |
-| A38 | Settings: music volume, SFX volume, notifications, reduced motion | R-1.3 requires settings; the list is invented, and there's no audio yet | Unresolved (list) | `ProfileSchema.SETTINGS` |
-| A39 | UI style: FredokaOne font, outlined white text, pill buttons, dark panels, left stats, top-centre actions, right rail, bottom-right toasts | R-1.6.2 (reference direction) | Decision | `UI/Theme`, `HUDController` |
-| A40 | HUD labels and navigation set (BUY PACKS, MY STANDS, BAG, BINDER, UPGRADES, SETTINGS); no Shop button and no goal panel | The reference rail has Shop and More buttons, and a goal panel top-left (shots 01, 03, 13) | Unresolved | `HUDController` |
+| C1 | No unopened-pack inventory; packs open instantly on purchase | §3.3 starter **packs**; §13 and §17 grant packs as rewards; §7.5 opening sequence | Add owned packs (`Packs: { [packId]: count }`), an `OpenPack` remote, and starter packs. The shop may keep "buy and open" as a shortcut (Q1) | Additive field. `reconcile` adds it; no version bump |
+| C2 | Instant grid reveal | §7.5 pack, blur, animation, open, flip, rarity effects, skip option | A new opening sequence controller, plus a results screen and a skip setting | None (Settings gains `SkipAnimations`, additive) |
+| C3 | Stands exist only as a UI list | §8 physical stands on a personal plot, with interaction | `PlotService` (claim and release, per-server plot assignment), physical stand models, ProximityPrompt interaction. Reuse `Logic/Display` and the saved `Display` map unchanged | None: `Display` slot → instance already persists the arrangement |
+| C4 | Income auto-credited to Cash every second | §10 stands accumulate; the player **collects**; the Auto-Collection upgrade or pass and the Collection Radius upgrade imply manual collection by default | Track uncollected earnings per stand on the server; add a `CollectEarnings` remote (by stand, or all within radius); credit Cash only on collection | Additive (pending earnings) if uncollected earnings must survive a rejoin (Q3) |
+| C5 | Starter grant: 1,500 Cash plus two cards on stands | §3.3 starter currency **and starter packs**; §32 starting cash $500 | Grant $500 plus N starter packs (count to be decided); the tutorial guides opening and placing | Existing profiles keep their grant (`Flags.StarterGranted`). Only testers' data exists |
+| C6 | Collection bonus is the only binder reward | §13 one-time claimable rewards (cash, packs, variants, decorations, titles, badges, slots) | Add a `ClaimBinderReward` remote using the reserved `Collections.Claimed`. Keep the income bonus as one reward type | None (field reserved) |
+| C7 | Grading by four averaged sub-grades | §11 configurable **per-grade probability table**, with probabilities shown in the UI | Replace with `Config/Grading.GradeWeights[1..10]` (or per-category tables). Sub-grades may stay as cosmetic flavour only if derived from the rolled grade | **None**: no card has ever been graded (`Grade` is nil everywhere) |
+| C8 | Treats: a second currency, earned on level-up, with nothing to spend it on | Not defined in the spec. §17 and §22 mention "special event currency" only | Owner decision (Q9): repurpose Treats as the §22 event currency, or remove them | If removed or renamed: version bump with `MIGRATIONS[1]` (drop or move `Currency.Treats`) |
+| C9 | Developer-product placeholders sell Treats | §23 suggests Cash bundles and boosts | Replace the placeholders with Cash bundles and temporary boosts | None (placeholders, all disabled) |
+| C10 | Income scales by collection tier (Burrow ×1 to Midnight ×12,000; up to 3.6M/s); packs cost 750 to 200M; starting cash 1,500 | §32 rarity income bands (Common $2–10, Uncommon $10–30, Rare $30–100, Epic $100–300, Legendary $300–1,000, Mythic and Secret higher); starting cash $500; starter pack $100 | Re-balance cards to rarity bands and re-price packs, then re-run `scripts/simulate.luau` against §32's "first ten minutes" goal | None (config). Existing testers' balances are unaffected |
+| C11 | Backpack, Stands and Binder rebuild every tile on every change | §14.4 no rendering of every card at once; §29 no full rebuilds | Grouped and virtualised grid (one tile per CardId and variant with counts, rendered on demand); incremental updates | None |
+| C12 | Currency HUD on the left-middle | §24 TOP AREA holds cash, income/s and currencies | Move the stats cluster to the top bar; add the missing side-nav entries as features land | None |
+| C13 | Extra `SellBonus` upgrade; 6 of the 10 spec upgrades missing | §15 initial upgrade list | Add the missing upgrades as their systems land. Owner decision (Q8) on keeping SellBonus | Removing it: refund the cumulative cost and drop `Upgrades.SellBonus` (version bump) |
+| C14 | Phase order diverged | §30 Phase 2 = plots, stands, illustrations, income | Finish the spec's Phase 2 before more Phase 3 or 4 work (ROADMAP Phase A) | — |
+| C15 | Pack buy buttons ignore affordability; no purchase confirmation | §7.3 | Grey out unaffordable packs; confirm large purchases | None |
+| C16 | No server-side request idempotency | §7.4, §27 "transaction uniqueness"; §31 "repeated requests do not grant duplicate rewards" | Optional client request id on purchase and grade remotes, de-duplicated per session on the server | None |
 
-### Summary
+### Earlier assumptions now settled by the specification
 
-| Classification | Count | Items |
+The previous assumption register (A1–A40) is superseded:
+
+- **Confirmed by the spec:**
+  - A7: the seven rarities.
+  - A12 and A34: permanent card ids, separate from instance ids.
+  - A18: odds shown to players.
+  - A25: protection for favourite and displayed cards.
+  - A35–A37: session locking, the Studio mock store and rate limits.
+  - A11: configurable placeholder art.
+  - A10: a permanent income bonus is an allowed binder reward, but it isn't enough on its
+    own (C6).
+  - A8, partly: Normal, Gold, Rainbow, Shiny and Holographic are confirmed; the multipliers
+    remain ours to balance.
+  - A28, partly: four upgrades map to spec upgrades.
+- **Contradicted by the spec:**
+  - A2 (C3).
+  - A13 (C1).
+  - A16 and A22 (C5, C10).
+  - A20 and A21 (C8).
+  - A23: no offline income and no collection (C4, §10).
+  - A31 (C7).
+  - A33 (C9).
+  - A40 (C12).
+- **Not addressed by the spec (kept as implementation decisions; owner may veto):**
+  - A26: player level and XP gating packs. The spec never mentions player levels. See Q7.
+  - A30: Place Best.
+  - A6: species as colour morphs. The spec mentions "species, personalities"; see Q5.
+  - A5: card names and collections. The spec's names are examples; ours are original and
+    allowed.
+
+## Ambiguities (documented, not decided)
+
+These are questions the specification leaves open. Each is listed rather than settled by an
+irreversible decision.
+
+| # | Question | Spec evidence | Interim position |
+| --- | --- | --- | --- |
+| Q1 | Do bought packs go into inventory, or open immediately? | §7.5 describes opening the "selected pack"; §3.3 and §13/§17 imply owned packs | Support both: owned packs (needed for rewards) plus "buy and open now" in the shop |
+| Q2 | How many cards per pack? | §7.5 shows *one* card appearing and flipping per pack; a results screen is used "if the player obtains several cards" | Leans toward **1 card per pack** (`CardsPerOpen` is config, so no migration). Owner to confirm |
+| Q3 | Collect per stand, centrally, or both? Is there a cap on accumulation? Do uncollected earnings survive leaving? | §10 says choose one approach and apply it consistently; the Collection Radius and Auto-Collection upgrades suggest per-stand pickup | Per-stand accumulation with a radius pickup; a cap equal to the offline cap; persist pending earnings |
+| Q4 | Plot claiming: a manual claim pad, or auto-assignment? How many plots per server? | §3.2 "Claim a personal plot"; §8 "claiming and releasing plots" | A manual claim at an unowned plot, with auto-claim after a timeout. Plots are per server; the arrangement persists |
+| Q5 | What do "species" and "personalities" mean? | §3.5 and the §4 Species field | Species stays a descriptive field. Personality could become a Tag (§4.3) |
+| Q6 | Can displayed cards be graded? Can graded cards be re-graded, and if so does a lower result replace the grade? | §11.7 "if the grading rules prohibit…"; the UI shows "current grade, if already graded" | Require removal from the stand; allow re-grading, where the new grade replaces the old (the spec states the risk); make it configurable |
+| Q7 | Keep the player level and XP system (not in the spec)? | The spec has no levels; its unlocks are card `UnlockRequirements`, events and progression | Keep it as a pacing gate for now. Don't extend it until the owner decides |
+| Q8 | Keep the SellBonus upgrade? | Not in §15 | Keep it for now; it's listed in C13 |
+| Q9 | What happens to Treats? | Not defined; "special event currency" in §17 and §22 | Event currency (preferred) or removal |
+| Q10 | Plot Capacity vs Card Display Capacity: what's the difference? | §15 lists both | Plot Capacity = plot expansions (space and decorations); Display Capacity = stand count |
+| Q11 | "Collection value" per rarity: what does it feed? | §6 | Probably sale value and binder prestige; unused until leaderboards and prestige exist |
+| Q12 | Daily-reward reset boundary | §17 says handle time zones consistently | A UTC day boundary, shown as a countdown |
+| Q13 | Can trades include currency? | §20 "if the economy design supports it" | Cards only in the first version |
+
+## Configuration differences
+
+These compare our configuration with the spec's examples and guidelines. The spec calls its
+§32 and §11 values guidelines or suggestions, so differences become required changes only
+where they break a stated goal. The recommended changes are config-only, and **none needs a
+data migration**.
+
+| Setting | Spec | Current | Recommendation |
+| --- | --- | --- | --- |
+| Starting cash | $500 | 1,500 | Change to 500, plus starter packs (C5) |
+| Starter / first pack price | $100 | Burrow Pack 750 | Add a $100 Starter Pack |
+| Basic display stand | Free; "a small number" initially | 4 free stands | Owner to confirm the initial count |
+| Common income | $2–10/s | 1/s (Burrow) up to 12,000/s (Midnight) | Re-band by rarity (C10) |
+| Uncommon income | $10–30/s | 2 to 30,000/s | Re-band |
+| Rare income | $30–100/s | 6 to 72,000/s | Re-band |
+| Epic income | $100–300/s | 15 to 180,000/s | Re-band |
+| Legendary income | $300–1,000/s | 320 to 480,000/s | Re-band |
+| Mythic / Secret income | "Higher" / "exceptional" | 200K–1.2M / 3.6M/s | Re-band relative to Legendary |
+| Grade multipliers | 0.8 / 0.9 / 1.0 / 1.1 / 1.2 / 1.4 / 1.7 / 2.1 / 2.7 / 3.5 | 0.8 / 0.85 / 0.9 / 0.95 / 1 / 1.1 / 1.2 / 1.5 / 2 / 3 | Adopt the spec's table as the starting point with the grading rework (C7). No migration: nothing is graded |
+| Grade probabilities | A configurable per-grade table | Derived from sub-grade weights | Add `GradeWeights` (C7) |
+| Upgrade cost formula | `Base × Mult ^ Level` | Identical | Keep |
+| Variants | 9 listed | 5 | Add Crystal, Shadow, Prismatic and Limited Edition; rename the Holo display name to "Holographic" (keep the id `Holo`, so no migration) |
+| Pack names | Starter, Meadow, Woodland, Ocean, Adventure, Royal, Mythic, Limited Event ("could include") | Burrow, Snack, Knight, Shore, Cosmic, Midnight | Optional; examples only. Renaming pack ids is safe today (packs aren't stored) but not once the pack inventory exists |
+| Card names | Examples (Sleepy Ferret, …) | Original names | Optional; examples only. Renaming card ids after release needs a migration |
+
+## Data migrations
+
+**Current schema: v1. This audit made no changes, so no migration runs now.** The roadmap's
+changes have this data impact:
+
+| Change | Kind | Action |
 | --- | --- | --- |
-| Confirmed by the original specification | **0** | (specification not recovered) |
-| Reasonable implementation decision | 12 | A11, A12, A18, A19, A25, A30, A34–A37, A39, and A22's grant-once mechanism |
-| Unresolved design decision | 26 | A1, A3, A5–A10, A14–A17, A20–A24, A26–A29, A31–A33, A38, A40 |
-| Deviation from the intended design (per the reference direction) | 2 | A2 (UI-only stands), A13 (packs open immediately) |
+| Pack inventory (C1) | Additive | Add `Packs = {}` to `defaults()`. `reconcile` fills it on load; no version bump |
+| Offline timestamp (§10, §28) | Additive | Add `Income = { LastOnline = 0, Pending = {} }`. On first load, 0 means "no offline award" |
+| Uncollected stand earnings (C4) | Additive | Part of the field above |
+| Active boosts (§16, §28) | Additive | `Boosts = { [boostId] = expiresAtUnix }` |
+| Tutorial progress (§3) | Additive, with initialisation | `Tutorial = { Step = 0, Done = false }`. **Existing profiles** should be marked done (when `Stats.PacksOpened > 0`) inside a v1→v2 migration, so veterans don't see the tutorial |
+| Quest claim state (§17) | Shape change of a reserved, always-empty field | Restructure `Quests` in the same v2 migration. Safe, because no data uses it |
+| Achievements and leaderboard stats (§21) | Additive | `Achievements = {}`. Track `HighestGrade` in `Stats` |
+| Grading rework (C7) | None | No graded cards exist |
+| Remove or rename Treats (C8) | **Breaking** | v1→v2 `MIGRATIONS[1]`: move or drop `Currency.Treats` |
+| Remove SellBonus (C13) | **Breaking** | v1→v2: refund the cumulative cost to Cash, then drop the key |
+| Rebalancing (C10) | None | Config only |
 
-## Configuration values versus the original design
+**Recommendation:** batch every breaking and initialising change into **one** v1→v2
+migration, written before the first public release, with a unit test for each step in
+`ProfileSchema.spec.luau`. No production data exists yet: the game has never been
+published, as far as the repository shows.
 
-Without the specification, **no configuration value can be checked against the original
-design**, so no value changes are recommended at this time. Changing numbers to match
-unknown targets would be inventing requirements.
+---
 
-These are recommended once the specification is available, in this order:
+## What exists today (implementation inventory)
 
-1. **A21 (Treats have no use):** decide what Treats buy, or remove them. This is the only
-   current design gap that affects players: they collect a currency they can't spend.
-2. **A13 and A2 (deviations):** confirm whether packs should be stored and opened later,
-   and whether stands should be physical. Both are architecturally ready (see migration
-   notes).
-3. **A16 and A26 (pacing):** set target times, then re-tune with
-   `lune run scripts/simulate`.
-4. **A5, A8, A20 and A28 (ids):** confirm card, variant, currency and upgrade ids
-   **before the first public release**. Renaming any of them afterwards needs a data
-   migration.
+For reference, here is what the code contains. The status of each item is given by the
+audit above.
 
-## Migration notes
-
-**Current schema:** version 1 (`ProfileSchema.VERSION = 1`). No migration is required now:
-this review changed no gameplay code, config or schema.
-
-If the specification changes things, the impact on saved data is:
-
-| Change | Migration needed? | How |
-| --- | --- | --- |
-| Add a new field (pack inventory, offline income timestamp, boosts, quest structure) | No version bump required | `ProfileSchema.reconcile` fills new fields from the defaults on load. Add the field to `defaults()` |
-| Add cards, collections, packs, upgrades or variants | No | Config only |
-| Change numbers (prices, weights, multipliers, curves) | No | Config only. Existing balances and levels are kept, so check fairness |
-| **Rename or remove a card id** | **Yes** | Bump `VERSION`; `MIGRATIONS[1]` remaps `Cards[*].CardId` and the `Discovered` keys (or converts removed cards to Cash at sale value) |
-| **Rename or remove a variant id** | **Yes** | Remap `Cards[*].Variant` and `Discovered[*].Variants` |
-| **Rename the Treats currency** | **Yes** | Move `Currency.Treats` to the new key |
-| **Remove or rename an upgrade** | **Yes** | Remap `Upgrades[id]`, or refund the cumulative cost in Cash |
-| Lower the backpack capacity or the stand count | Policy decision | Keep the existing cards. `Display.sanitize` already drops stands beyond the new count on load |
-| Change the instance id format | **Avoid** | Ids are referenced by `Display`. A change needs a full remap |
-
-Migration rules (also in `ProfileSchema`):
-
-- Migrations run on a copy.
-- A failure rejects the load: the player is kicked, and their data is never reset.
-- Every migration gets a unit test in `tests/unit/ProfileSchema.spec.luau`.
+- **Shared logic:** `CardRegistry`, `Economy`, `Progression`, `Collections`, `PackRoller`,
+  `Grading` (helpers only), `Wallet`, `Inventory`, `Account`, `PackShop`, `Display`,
+  `Market`, `UpgradeShop`, `ConfigCheck`, `ProfileSchema`, and utilities (`WeightedRandom`,
+  `Validate`, `RateLimiter`, `Signal`, `Format`).
+- **Server:**
+  - Libraries: `SessionStore`, `MockDataStore`, `Net`.
+  - Services: `DataService`, `SettingsService`, `PackService`, `CardService`,
+    `UpgradeService`, `EconomyService`.
+- **Client:** HUD, notifications, and the Settings, Packs (with reveal), Backpack, My
+  Stands, Upgrades and Binder windows.
+- **Tests:** 113 Lune tests across config, rolls, economy, progression, schema, inventory
+  and account, gameplay transactions, utilities, grading helpers, SessionStore and the
+  built-place structure. CI runs the full Roblox-std Selene.
+- **Tools:** `scripts/check.sh`, `scripts/install-tools.sh`, `scripts/simulate.luau`.

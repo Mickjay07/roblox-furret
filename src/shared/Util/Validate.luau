@@ -30,9 +30,10 @@ function Validate.id(maxLength: number): Checker
 	return Validate.string(maxLength, "^[%w_%-]+$")
 end
 
--- Card instance ids: "<userId>-<serial>".
+-- Card instance ids: "<userId>-<serial>". UserIds are negative for local test players in
+-- Studio (Test > Clients and Servers), e.g. "-1-5".
 function Validate.instanceId(): Checker
-	return Validate.string(40, "^%d+%-%d+$")
+	return Validate.string(40, "^%-?%d+%-%d+$")
 end
 
 function Validate.integer(min: number, max: number): Checker

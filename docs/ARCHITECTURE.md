@@ -175,7 +175,7 @@ Requests (client to server): `GetSnapshot`, `UpdateSetting(key, value)`,
 `BuyPack(packId, amount 1-10)`, `PlaceCard(instanceId, slot 0-100)`,
 `RemoveCard(instanceId)`, `PlaceBest()`, `SellCards({instanceId} up to 50)`,
 `SetFavorite(instanceId, bool)` and `BuyUpgrade(upgradeId)`. Instance ids must match
-`^%d+%-%d+$`, and pack and upgrade ids must exist in Config.
+`^%-?%d+%-%d+$` (Studio test players have negative UserIds), and pack and upgrade ids must exist in Config.
 - Handlers must also check game rules: ownership, affordability, unlocks and capacity.
 
 **Replication:**
