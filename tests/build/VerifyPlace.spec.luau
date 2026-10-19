@@ -131,9 +131,8 @@ describe("built place", function()
 				104453844983670,
 			}
 		do
-			expect(string.find(source, `AssetId = {string.format("%d", id)},`, 1, true) ~= nil).toBe(true)
+			expect(string.find(source, string.format("%d", id), 1, true) ~= nil).toBe(true)
 		end
-		expect(string.find(source, "AssetId = 0,", 1, true)).toBeNil()
 	end)
 
 	for _, case in expected do
