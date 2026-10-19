@@ -10,8 +10,12 @@ Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 > - **Phase 2 (core loop):** buy and open packs, card reveal, backpack, display stands with
 >   passive income, selling, upgrades and the binder.
 >
-> Nothing has been play-tested in Roblox Studio yet. See
-> [docs/STATUS.md](docs/STATUS.md) and [DEVLOG.md](DEVLOG.md).
+> Nothing has been play-tested in Roblox Studio yet.
+>
+> **The master game specification has not been recovered.** [docs/SPEC.md](docs/SPEC.md)
+> lists the requirements on record and the missing ones.
+> [docs/STATUS.md](docs/STATUS.md#assumption-register) classifies every design assumption.
+> See also [DEVLOG.md](DEVLOG.md).
 
 ## Prerequisites
 

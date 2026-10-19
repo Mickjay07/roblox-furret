@@ -3,6 +3,37 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Specification review (no features added)
+
+**Searched for the master specification.** Not found in:
+- any repository branch;
+- GitHub issues or PRs (there are none);
+- the container's filesystem;
+- the development conversation.
+
+The local path `~/Downloads/Ferret frenzy/` is not reachable from the cloud. **The
+specification has not been recovered.**
+
+**Changed (documentation only; no code, config or schema changes)**
+- `docs/SPEC.md` now says explicitly that the specification is missing. It records the
+  requirements actually given in the phase briefs (R-0.x, R-1.x, R-2.1), notes that the
+  Phase 2 scope was proposed by development, and lists 30 missing requirements as
+  questions for the owner.
+- `docs/STATUS.md` replaces the nine-item assumption list with a full register of 40
+  entries, A1–A40, taken from the code and config:
+  - **0** confirmed by the specification;
+  - **12** reasonable implementation decisions;
+  - **26** unresolved design decisions;
+  - **2** provisional deviations from the reference direction: A2 (UI-only stands) and A13
+    (packs open immediately instead of being stored).
+- New finding (A21): Treats are earned but nothing spends them.
+- **Config:** no values were changed, because there is no original design to compare
+  against. The register lists recommended next steps and the migration impact of each
+  possible change. Schema v1 needs no migration.
+
+**Verified (cloud container)**
+- `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: all steps pass, 113 tests, 0 failures.
+
 ## 2026-10-19: Phase 2: core gameplay loop
 
 **Changed**
