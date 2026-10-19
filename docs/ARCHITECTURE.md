@@ -195,9 +195,61 @@ authored for a 1280×760 viewport and scaled to the screen with `Components.auto
 `UI/Windows` is a single-window modal manager: features register a window, and HUD
 navigation opens it. Unregistered features show "Coming soon!".
 
+## World and plots (Phase A1–A3)
+
+**Generated world.**
+- `server/World/WorldBuilder` builds the world at server start from `Config/World` (layout,
+  in plain numbers) and `Config/Visuals` (palette). The world is not stored in the place
+  file, so Studio's edit view shows only the template; press Play to see it.
+- It removes the Studio Baseplate template's floor and spawn.
+- Hierarchy:
+  - `Workspace.World.Environment`: decoration only.
+  - `Workspace.World.Stations`: one Model per station, with attribute `Station`.
+  - `Workspace.Plots.Plot_NN.Stands.Stand_MM`: the plots and their stands.
+
+**Plots.**
+- `PlotService` assigns a free plot when `DataService.ProfileLoaded` fires (so never for a
+  failed load), and releases it on `ProfileReleasing` or `PlayerRemoving`.
+- `Logic/PlotAllocator` (pure, tested) guarantees unique ownership.
+- Eight plots: set the experience's *Max Players* to 8. A 9th player gets a toast and plays
+  through the menus.
+
+**Stands mirror saved data.**
+- On every `DataService.KeyChanged` for Display, Cards or Upgrades, `PlotService` applies
+  `Logic/PlotView.standStates(data)` to the 12 stand models as attributes: `OwnerUserId`,
+  `Unlocked`, `CardId` and `Variant`.
+- The saved `Display` map stays the only source of truth, so no schema change was needed,
+  and My Stands and the physical stands can't disagree.
+
+**No plot ids over the network.**
+- Stand prompts are created locally by `PlotController`, and only on the player's own
+  stands; visitors get a read-only Inspect.
+- Actions go through the existing remotes (`PlaceCard(instanceId, slot)` and
+  `CollectEarnings(slot)`), which operate on the caller's own data. A client therefore can't
+  address another player's plot at all.
+
+**Illustrations.**
+- `StandVisualsController` builds a BillboardGui above each stand's invisible `Anchor` from
+  the stand attributes (all plots, so visitors see them).
+- Artwork is resolved only through `Logic/CardArt` and `Config/Assets`, with a placeholder
+  card until the image is uploaded.
+- One RenderStepped loop floats every illustration.
+- Rarity effects come from `Config/Visuals.RarityEffects`, and run only within
+  `EffectDistance`.
+- All client objects are destroyed when a stand clears or is removed.
+
+**Artwork pipeline.** Originals live in `assets/source/`;
+`scripts/assets/process_card_art.py` produces upload-ready copies in `assets/processed/`.
+Asset ids are pasted into `Config/Assets` after a manual upload (`assets/README.md`).
+
+**Developer tools.**
+- `server/Lib/DevCommands` is pure and tested.
+- `DevService` creates the `DevCommand` remote only when `RunService:IsStudio()`.
+- `DevController` shows the panel in Studio.
+- See `docs/DEVTOOLS.md`.
+
 ## World geometry
 
-Rojo is a poor fit for hand-built 3D layouts. The plan is to export plot templates from
-Studio as `.rbxm` files to `assets/models/` and map them in `default.project.json`, or to
-generate simple geometry in code. This will be decided in the phase that builds the
-physical plot.
+**Decision (Phase A2):** the world is generated in code, so it is reviewable, testable
+(layout maths) and Rojo-friendly. If hand-modelled pieces are added later, export them as
+`.rbxm` files to `assets/models/` and map them in `default.project.json`.

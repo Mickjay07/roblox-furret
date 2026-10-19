@@ -3,19 +3,22 @@
 A Roblox collectible card tycoon game. The source code lives in this repository as plain
 Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 
-> **Status:** The foundation and an interim core loop are implemented: data-driven config,
-> server-authoritative packs (bought into an inventory, opened for 5 cards), inventory,
-> UI-based stands that accumulate collectable earnings, offline earnings, upgrades and
-> binders, with session-locked persistence.
+> **Status:** The core loop runs in a generated 3D world.
 >
-> The recovered master specification ([docs/SPEC.md](docs/SPEC.md)) is now the source of
-> truth.
+> - **Packs:** bought into an inventory and opened for 5 cards each.
+> - **Plots:** each player is automatically given a physical plot with 12 display stands.
+> - **Ferrets in the world:** floating ferret card illustrations with rarity effects.
+> - **Income:** stand earnings, collected per stand or centrally, plus offline earnings.
+> - **Also:** upgrades, the binder, session-locked persistence, and Studio-only developer
+>   tools.
 >
-> - [docs/STATUS.md](docs/STATUS.md) audits every requirement against it: 11 conflicts remain,
->   and the core 3D features (plots, stands, in-world ferret illustrations) are not built yet.
-> - [docs/ROADMAP.md](docs/ROADMAP.md) gives the next steps.
+> The master specification is [docs/SPEC.md](docs/SPEC.md);
+> [docs/STATUS.md](docs/STATUS.md) audits every requirement, and
+> [docs/ROADMAP.md](docs/ROADMAP.md) has the next steps.
 >
-> Nothing has been play-tested in Roblox Studio yet. See [DEVLOG.md](DEVLOG.md).
+> **Nothing has been play-tested in Roblox Studio yet.** The Pack 1 artwork still has to be
+> uploaded to Roblox; see [assets/README.md](assets/README.md). Until then, the game shows
+> placeholder cards.
 
 ## Prerequisites
 
@@ -37,6 +40,19 @@ cd roblox-furret
 rokit install            # or, on Linux/CI: ./scripts/install-tools.sh
 rojo plugin install      # installs the Rojo plugin into Roblox Studio
 ```
+
+## World, plots and art in Studio
+
+- **World:** the world is generated when the game starts. Press **Play** to see it; Studio's
+  edit view only shows the template. Start from a *Baseplate*: its floor and SpawnLocation
+  are removed automatically at runtime.
+- **Plots:** there are 8. Set *Game Settings → Places → Max Players* to **8** so every
+  player gets one.
+- **Card art:** upload the images in `assets/processed/pack1/` once, and paste the asset ids
+  into `src/shared/Config/Assets.luau`. Step-by-step instructions are in
+  [assets/README.md](assets/README.md).
+- **Developer tools:** in Studio, click the pink **DEV** button. The commands are listed in
+  [docs/DEVTOOLS.md](docs/DEVTOOLS.md).
 
 ## Saving data in Studio
 
@@ -96,8 +112,9 @@ src/server/            → ServerScriptService.Server   (bootstrap, Lib/, Servic
 src/client/            → StarterPlayerScripts.Client  (bootstrap, Lib/, UI/, Controllers/)
 src/shared/            → ReplicatedStorage.Shared     (Config/, Logic/, Data/, Util/, Remotes, Types)
 tests/                 Lune runner, Roblox-require Loader, unit and place-structure specs
-scripts/               install-tools.sh, check.sh, selene-offline/
-docs/                  Architecture, status, testing, spec, reference screenshots, Phase 0 report
+scripts/               install-tools.sh, check.sh, simulate.luau, selene-offline/, assets/process_card_art.py
+docs/                  Architecture, status, roadmap, testing, dev tools, spec, reference screenshots
+assets/                Art: source originals, processed upload-ready copies, README (mapping + upload steps)
 ```
 
 ## Git workflow

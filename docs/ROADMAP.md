@@ -35,14 +35,14 @@ earn offline income.
 
 | # | Work | Spec | Depends on | Notes |
 | --- | --- | --- | --- | --- |
-| A1 | **Developer tools:** Studio-only commands (give cash, give packs, reset profile, fast-forward offline time, roll N packs and print the distribution), gated by `RunService:IsStudio()` plus an allowlist and never exposed in live servers | §6.11, §31.10, §32 | — | Speeds up every later Studio test |
-| A2 | **World skeleton:** spawn plaza, plot row, signs; code-generated simple geometry (an `.rbxm` export can replace it later) | §18 | — | Keep it minimal; stations come later |
-| A3 | **PlotService:** **automatic assignment of a free plot on join** (decision Q4); release on leave; owner sign; "return to my plot"; ownership checks on every plot remote. Pure `PlotAllocator` with tests | §8.1–8.2, §27 | A2 | The saved arrangement stays in `Display` (no migration) |
-| A4 | **Physical display stands:** stand models per slot; locked-stand visuals; ProximityPrompt opens a card picker that reuses the backpack; placement goes through the existing `PlaceCard` and `RemoveCard` | §8.4–8.7 (C3) | A3 | Server logic (`Logic/Display`) is reused unchanged |
-| A5 | **2D ferret illustrations in the world:** a BillboardGui (or SurfaceGui) ImageLabel per occupied stand, built client-side from replicated stand state; aspect ratio and transparency kept; idle float and sway; config-driven rarity effects; distance culling and an effect budget; updates on replace and removal | §9 (the spec's most important feature) | A4 | Uses placeholder art until real art exists (§5.3) |
-| A6 | 🟠 **Mostly done:** accumulation, per-stand and central collection, offline earnings (tests). **Remaining:** collecting at the physical stand (with A4), floating "+$" indicators, full inspect panel. Original scope — **Income rework:** server-side per-stand accumulation (one scheduler); `CollectEarnings` (per stand, and all within radius); floating "+$" indicators; a per-stand inspect panel (base and effective income, accumulated earnings, bonuses); **offline earnings** from the saved timestamp with a cap, shown on rejoin. Pure `IncomeLedger` with tests for duplication, exploits and caps | §10 (C4), §28 | A4, Q3 | Additive fields `Income.LastOnline` and `Income.Pending` |
+| A1 | ✅ **Done (2026-10-19):** Studio-only developer commands (`docs/DEVTOOLS.md`): cash, packs, test cards, level, accrue, simulated offline time, distribution rolls, stand/income/data/plot diagnostics, save, home, reset. The remote is never created on live servers | §6.11, §31.10, §32 | — | Tested (`DevCommands.spec`) |
+| A2 | ✅ **Done:** generated world: spawn plaza with monument, avenue, Pack Shop, Upgrades, Collect All, reserved Grader, light decor, lighting (`World/WorldBuilder`, `Config/World`, `Config/Visuals`) | §18 | — | Needs a Studio look-and-feel pass |
+| A3 | ✅ **Done:** `PlotService` with automatic assignment after a safe load (Q4), unique ownership, release on leave, full-server message, owner signs, spawn on own plot, MY PLOT teleport; no remote takes plot ids | §8.1–8.2, §27 | A2 | Tested (`Plots.spec`) |
+| A4 | ✅ **Done:** 12 physical stands per plot mirroring `Display` (`PlotView`); locked-stand visuals; stand prompts open the backpack for that stand; placement through the existing `PlaceCard` | §8.4–8.7 (C3) | A3 | |
+| A5 | ✅ **Done:** floating card illustrations (`StandVisualsController`) with aspect ratio kept, shared float loop, rarity effects near the camera, culling, cleanup; placeholder until art is uploaded | §9 | A4 | **The Pack 1 art must be uploaded to Roblox** (assets/README.md) |
+| A6 | 🟠 **Mostly done:** accumulation, per-stand (stand prompt) and central (booth, HUD, My Stands) collection, offline earnings, "$X" stand labels. **Remaining:** collection animation, full inspect panel with bonus breakdown, collection radius (upgrade, Phase B) | §10 (C4), §28 | A4 | Additive fields `Income.LastOnline` and `Income.Pending` |
 | A7 | 🟠 **Partly done:** pack inventory, `OpenPack`, starter packs, 5 cards per pack. **Remaining:** the §7.5 opening sequence and the skip setting. Original scope — **Pack inventory and opening sequence:** owned packs, `OpenPack`, starter packs in the starter grant, shop "buy" (plus optional "buy and open"), the §7.5 sequence (centred pack, blur, open, flip, rarity effects), a results screen, and a skip-animations setting | §3.3, §7.5 (C1, C2, C5) | Q1, Q2 | Additive `Packs` field; `Settings.SkipAnimations` |
-| A8 | 🟠 **Partly done:** $500 starting cash; affordability greying. **Remaining:** re-band card income by rarity, $500 start, $100 Starter Pack, re-price packs; `scripts/simulate.luau` targets for the first 10 minutes; affordability greying; purchase confirmation; optional request ids for idempotency | §32 (C10), §7.3 (C15), §7.4 (C16) | A6, A7 | Config only, plus a small `Net` change |
+| A8 | 🟠 **Partly done:** $500 starting cash; affordability greying; Pack 1 priced so it can't be resold at a profit. **Remaining (now urgent, Q14):** decide whether to re-band or retire the placeholder catalog around Pack 1's printed values; re-price; first-10-minutes targets in `scripts/simulate.luau`; purchase confirmation; optional request ids | §32 (C10), §7.3 (C15), §7.4 (C16) | Q14 | Config only, plus a small `Net` change |
 | A9 | **HUD alignment:** cash, income/s and currencies in the top area; Pack Shop and Plot at the top; side nav ready for Grader, Boosts, Shop and Quests | §24 (C12) | — | Small |
 
 **Exit criteria:**
@@ -101,31 +101,23 @@ earn offline income.
 
 ---
 
-## Recommended next phase: **Phase A**
+## Recommended next step (after Phase A1–A5, 2026-10-19)
 
-**Why Phase A first:**
+**1. Gate 1: Studio verification and art upload.** These are owner actions; they unblock
+everything that is 🟡:
+- Run TESTING.md Part 1 in Studio, especially 1.3 (persistence), 1.4 (security probes),
+  1.9 (plots and stands), 1.10 (illustrations) and 1.12 (developer tools).
+- Upload the seven processed Pack 1 images and paste the asset ids into
+  `Config/Assets.luau` (assets/README.md).
+- Answer Q14 (placeholder catalog: re-band or retire?) and Q15 (brand name).
 
-1. **The spec's dependency order demands it.** §30 puts plot claiming, display stands, 2D
-   illustrations and passive income in Phase 2, *before* grading, binders and upgrades. We
-   built parts of Phase 3 early and skipped these. §30 says to "preserve the dependency
-   order".
-2. **It contains the spec's most important features.** §9 calls in-world ferret
-   illustrations "one of the most important features", and §36 names "visible 2D ferret
-   illustrations in the world [and] passive income" as the heart of the game. Neither exists
-   today.
-3. **It resolves the largest conflicts.** Phase A fixes C1–C5, C10, C12, C15 and C16:
-   UI-only stands, auto-credited income, missing pack inventory and starter packs, the
-   instant reveal, and an economy that doesn't follow §32.
-4. **Later phases depend on it.** The Grader is a physical station (§11). Collection Radius
-   and Auto-Collection upgrades need collectable income. Quests count "collect earnings" and
-   "display 4 cards". Visiting plots and trading need plots. Offline-earnings passes need
-   offline earnings.
-5. **It reuses the parts that already work.** Server-authoritative placement
-   (`Logic/Display`), the saved `Display` arrangement, the income formula, pack rolling and
-   persistence all carry over unchanged. Data changes are additive only, so no breaking
-   migration is needed.
+**2. Then finish Phase A:**
+- **A8, the rebalance:** first, because Pack 1's printed values make the placeholder
+  economy meaningless.
+- **A7's §7.5 opening sequence:** the pack-front art now exists, so the sequence can show
+  the real pack.
+- **A9:** the HUD top-bar alignment.
 
-**Suggested order inside Phase A:** Gate 0 → A1 → A2 → A3 → A4 → A5 → A6 → A7 → A8 → A9.
-
-A1 (developer tools) comes first because every later item needs Studio verification, and
-the tools make that fast and repeatable.
+**Why:** these complete the spec's Phase 2 (§30) and fix the remaining core-loop conflicts
+(C2, C10, C12). Phase B (the Grader Station, already reserved in the world) builds on a
+balanced economy, so it should wait for A8.

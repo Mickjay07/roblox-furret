@@ -1,6 +1,6 @@
 # Implementation status: audit against the specification
 
-Last updated: 2026-10-19 (owner decisions Q1–Q4 applied).
+Last updated: 2026-10-19 (Phase A1–A3: dev tools, world, physical plots, Pack 1 art).
 
 The audit compares the code on branch `claude/ferret-card-tycoon-setup-8vqo00` against the
 recovered master specification ([SPEC.md](SPEC.md), 36 sections, 2,081 lines, commit
@@ -31,14 +31,14 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 
 | Spec area | ✅ | 🟡 | 🟠 | ⬜ | ❌ |
 | --- | --- | --- | --- | --- | --- |
-| §1–3 Concept, identity, core loop | 3 | 1 | 2 | 3 | 0 |
+| §1–3 Concept, identity, core loop | 3 | 4 | 1 | 1 | 0 |
 | §4 Card system | 5 | 0 | 1 | 3 | 0 |
 | §5 Artwork | 2 | 1 | 1 | 1 | 0 |
-| §6 Rarity and drop tables | 6 | 0 | 3 | 3 | 1 |
+| §6 Rarity and drop tables | 7 | 0 | 2 | 3 | 1 |
 | §7 Pack shop and opening | 6 | 2 | 5 | 3 | 1 |
-| §8 Plots and stands | 2 | 0 | 0 | 5 | 1 |
-| §9 2D ferrets in the world | 0 | 0 | 0 | 7 | 0 |
-| §10 Income and offline earnings | 7 | 1 | 2 | 2 | 0 |
+| §8 Plots and stands | 2 | 5 | 0 | 1 | 0 |
+| §9 2D ferrets in the world | 0 | 7 | 0 | 0 | 0 |
+| §10 Income and offline earnings | 7 | 1 | 3 | 1 | 0 |
 | §11 Grader | 1 | 0 | 1 | 4 | 1 |
 | §12 Variants | 2 | 0 | 2 | 1 | 0 |
 | §13 Binders | 1 | 1 | 3 | 2 | 0 |
@@ -46,28 +46,33 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §15 Upgrades | 3 | 0 | 2 | 0 | 1 |
 | §16 Boosts | 0 | 0 | 0 | 2 | 0 |
 | §17 Daily rewards and quests | 0 | 0 | 0 | 2 | 0 |
-| §18 World and hub | 0 | 0 | 0 | 3 | 0 |
+| §18 World and hub | 0 | 1 | 2 | 0 | 0 |
 | §19 Selling | 3 | 1 | 2 | 1 | 0 |
 | §20 Trading | 0 | 0 | 0 | 1 | 0 |
 | §21 Leaderboards and achievements | 0 | 0 | 1 | 1 | 0 |
 | §22 Events | 0 | 0 | 0 | 1 | 0 |
 | §23 Robux monetization | 1 | 0 | 0 | 4 | 1 |
 | §24–25 UI and audio | 1 | 1 | 3 | 2 | 1 |
-| §26–29 Architecture, security, persistence, performance | 8 | 3 | 2 | 3 | 1 |
-| §30–33 Process, testing, balancing, deliverables | 7 | 0 | 4 | 2 | 2 |
-| **Total** | **58** | **14** | **37** | **58** | **11** |
+| §26–29 Architecture, security, persistence, performance | 8 | 3 | 3 | 2 | 1 |
+| §30–33 Process, testing, balancing, deliverables | 9 | 0 | 3 | 1 | 2 |
+| **Total** | **61** | **30** | **38** | **39** | **10** |
 
 **In short:**
 
 - **Strong:** the foundation. Data-driven config, the card registry, server authority,
   validated remotes, session-locked persistence, the centralised income formula and the
   upgrade cost formula.
-- **Missing:** the spec's defining features. Physical plots and stands, 2D ferret
-  illustrations in the 3D world, collectable and offline income, the Grader Station, boosts,
-  quests, daily rewards, the store and trading.
-- **Contradicting the spec:** 16 earlier decisions, listed in
-  [Conflicts](#conflicts-with-the-specification). C1, C4 (in logic and UI) and C5 are
-  resolved, and C15 is partly resolved, after the owner's decisions Q1–Q4.
+- **New (Phase A1–A3):** a generated 3D world, auto-assigned physical plots with 12 stands
+  each, floating ferret card illustrations with rarity effects, stand and central
+  collection in the world, Studio-only developer tools, and the Pack 1 artwork mapping.
+  Almost all of it is still 🟡, because **nothing has run in Roblox Studio yet**.
+- **Missing:**
+  - The §7.5 opening sequence.
+  - The rebalance (Q14).
+  - The Grader Station.
+  - Boosts, quests, daily rewards, the store and trading.
+- **Art:** Pack 1 isn't uploaded to Roblox yet (manual step in `assets/README.md`).
+- **Conflicts:** 10 remain; C1, C3, C4 and C5 are resolved.
 
 ---
 
@@ -78,10 +83,10 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §1 | All player-facing text in English; consistent English naming | ✅ | All strings and identifiers are in English |
 | §2 | Ferrets, original content, nothing copied from the reference game | 🟡 | 36 original ferret cards. Screenshots used for layout only (`docs/reference-screenshots/README.md`) |
 | §2 | Reusable design system: palette, typography, buttons, card frames, rarity colours, modals, **tooltips**, notifications, progress bars, currency displays, **loading states**, hover/selection | 🟠 | `UI/Theme`, `UI/Components`, `UI/CardTile`, `UI/Windows`. No tooltips, no loading states |
-| §3.1–2 | Join, then **claim a personal plot** | ⬜ | No plots exist. Owner decision Q4: the plot is assigned automatically on join (roadmap A3) |
+| §3.1–2 | Join, then **claim a personal plot** | 🟡 | A free plot is assigned automatically once data has loaded safely (decision Q4; `PlotService`, `Logic/PlotAllocator`; tests: `Plots.spec`). The player spawns on their plot. Not verified in Studio |
 | §3.3 | Starter currency **and starter card packs** | ✅ | $500 plus 3 Burrow Packs in the pack inventory, granted once (`Account.grantStarter`, `Config.Economy.StarterPacks`). Tests: `Inventory.spec`, `SessionStore.spec`. The pack count is an interim value |
-| §3.4–6 | Open packs, discover cards, place on stands | 🟠 | Packs and cards work. Stands are a UI list, not on a plot |
-| §3.7 | Spawn the illustrated ferrets in the world | ⬜ | See §9 |
+| §3.4–6 | Open packs, discover cards, place on stands | 🟡 | Packs open into 5 cards; cards go on **physical stands** through stand prompts or My Stands (same validated `PlaceCard`). Not verified in Studio |
+| §3.7 | Spawn the illustrated ferrets in the world | 🟡 | `StandVisualsController` floats the card art above every occupied stand on every plot. It shows a placeholder until images are uploaded (assets/README.md). Not verified in Studio |
 | §3.8–9 | Earn passive income, **then collect accumulated earnings** | ✅ | Stands accumulate earnings; the player collects per stand or all at once (`Logic/IncomeLedger`, `CollectEarnings`). Tests: `IncomeLedger.spec`. Collection works from the UI; collecting at a physical stand comes with A4 |
 | §3 | Guided, resumable tutorial | ⬜ | No tutorial, and no tutorial field in saved data |
 
@@ -104,8 +109,8 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | Req | Requirement | Status | Evidence / gap |
 | --- | --- | --- | --- |
 | §5.1 | At least 30 original card definitions | ✅ | 36. Test: `Config.spec` |
-| §5.2 | Distinct artwork per character; don't use the same image for every card | 🟠 | No art exists. Placeholder tiles vary only by rarity colour and species initials, so cards of the same species and rarity look alike |
-| §5.3 | Don't pretend final art exists; artwork references are configurable | ✅ | `Artwork = ""` plus a placeholder renderer. An asset id swaps in without code changes |
+| §5.2 | Distinct artwork per character; don't use the same image for every card | 🟠 | Pack 1's six cards have their own uploaded art (`Config/Assets`; test: `CardArt.spec`). It isn't on Roblox yet: the asset ids must be uploaded manually. The 36 placeholder cards have no art |
+| §5.3 | Don't pretend final art exists; artwork references are configurable | ✅ | `Config/Assets` is the single mapping (`AssetId = 0` until uploaded); `Logic/CardArt` falls back to a placeholder. Tests: `CardArt.spec` |
 | §5.4 | Rarity labels, readable income, optional flavour text on cards | 🟡 | `CardTile` shows the name, rarity and income/s. The description appears in the backpack detail |
 | §5.5 | Special visual treatments for rare variants | ⬜ | A text tag only |
 
@@ -123,7 +128,7 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §6.8 | Limited pools, special events, guaranteed rewards | ⬜ | Not supported |
 | §6.9 | Log acquisition events for debugging | ⬜ | Not logged |
 | §6.10 | Secret cards obtainable (never impossible by misconfiguration) | 🟠 | ConfigCheck verifies every card can be reached from some pack. It doesn't check that a non-zero probability survives unlock gating |
-| §6.11 | Developer tools to test pack probabilities | 🟠 | `PackRoller.odds` plus a distribution test and `scripts/simulate.luau` (offline). No in-game developer tool |
+| §6.11 | Developer tools to test pack probabilities | ✅ | Studio-only `roll <pack> <n>` compares rolled rarities with the configured odds (`Lib/DevCommands`; tests). `scripts/simulate.luau` for pacing |
 | §6.12 | Rewards generated and validated on the server only | ✅ | `PackService` with server `Random`. The client only receives the results |
 | §6/§32 | Income determined by rarity (§32 bands) | ❌ | Income scales by **collection tier** (×1 to ×12,000), not by rarity band. See C10 |
 
@@ -153,26 +158,26 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 
 | Req | Requirement | Status | Evidence / gap |
 | --- | --- | --- | --- |
-| §8.1 | Physical personal plot in a shared world | ⬜ | No world geometry at all (the place is empty apart from scripts) |
-| §8.2 | Unique ownership; claim and release; ownership indicators; owned vs unowned distinction | ⬜ | — |
-| §8.3 | Customisable decoration | ⬜ | — |
-| §8.4 | Multiple **physical** stands; small initial number; more via progression and upgrades | ❌ | The stand **count** logic exists (4 base plus the upgrade, `Economy.displaySlotCount`), but stands are UI slots, not world objects. See C3 |
-| §8.5 | Approach a stand → interact → select card → place → see it physically → remove/replace → collect income | ⬜ | Only the UI flow exists (My Stands window and Backpack) |
+| §8.1 | Physical personal plot in a shared world | 🟡 | 8 plots along an avenue in the generated world (`WorldBuilder.buildPlot`, `Config/World`; layout tests in `Plots.spec`) |
+| §8.2 | Unique ownership; claim and release; ownership indicators; owned vs unowned distinction | 🟡 | Automatic assignment (Q4), unique, released on leave, full-server message. Owner name on a two-sided entrance sign; free plots grey. Tests: `PlotAllocator` |
+| §8.3 | Customisable decoration | ⬜ | Space reserved: a back strip on every plot (`PlotFeatures.DecorationStripU`) |
+| §8.4 | Multiple **physical** stands; small initial number; more via progression and upgrades | 🟡 | 12 physical stands per plot; unlocked = 4 base + Display Stands upgrade; locked stands look greyed out (`PlotView`; tests) |
+| §8.5 | Approach a stand → interact → select card → place → see it physically → remove/replace → collect income | 🟡 | Stand prompts: Place/Change card (opens the backpack for that stand), Collect $X; the illustration appears above the stand. Removal happens via the backpack. Not verified in Studio |
 | §8.6 | The same card can't be on two stands | ✅ | `Display.place` moves the card. Test |
 | §8.7 | Server-validated placement; arrangement saved and restored on rejoin | ✅ | `CardService`, saved `Display`, `Display.sanitize` (tests). Rejoin is untested in Studio |
-| §8.8 | Visitors can inspect; no modification without permission | ⬜ | No plots to visit (remotes only touch the caller's own data, so cross-player modification is impossible today) |
+| §8.8 | Visitors can inspect; no modification without permission | 🟡 | Visitors get a read-only Inspect prompt. No remote accepts a plot or stand id, so every action affects only the caller's own plot (design plus `PlotAllocator` ownership tests) |
 
 ## §9 2D ferret illustrations in the 3D world (spec: "one of the most important features")
 
 | Req | Requirement | Status | Evidence / gap |
 | --- | --- | --- | --- |
-| §9.1 | The ferret illustration appears above or near the stand when a card is placed | ⬜ | Not implemented |
-| §9.2 | Faces the viewer, keeps its aspect ratio, transparent background, readable at distance | ⬜ | — |
-| §9.3 | Stays tied to its stand; updates on replace; disappears on removal | ⬜ | — |
-| §9.4 | Subtle idle animation (float, bounce, sway) | ⬜ | — |
-| §9.5 | Rarity effects: Rare blue particles, Epic purple glow, Legendary gold sparkles, Mythic aura, Secret unique; lightweight and configurable | ⬜ | — |
-| §9.6 | Responds to interactions | ⬜ | — |
-| §9.7 | World stays clear with many full plots; limit effects at distance | ⬜ | — |
+| §9.1 | The ferret illustration appears above or near the stand when a card is placed | 🟡 | BillboardGui above each occupied stand, built client-side from stand attributes (`StandVisualsController`) |
+| §9.2 | Faces the viewer, keeps its aspect ratio, transparent background, readable at distance | 🟡 | BillboardGui always faces the camera; size follows the art aspect (`CardArt.aspect`); alpha cleaned for opacity; `MaxDistance` 160 |
+| §9.3 | Stays tied to its stand; updates on replace; disappears on removal | 🟡 | Rebuilt on CardId/Variant change; destroyed on clear or stand removal; stand states tested in `Plots.spec` (`PlotView`) |
+| §9.4 | Subtle idle animation (float, bounce, sway) | 🟡 | One shared float loop (sinus bob, per-stand phase); off with Reduced Motion |
+| §9.5 | Rarity effects: Rare blue particles, Epic purple glow, Legendary gold sparkles, Mythic aura, Secret unique; lightweight and configurable | 🟡 | `Config/Visuals.RarityEffects` matches the spec list (light particle rates; glow lights) |
+| §9.6 | Responds to interactions | 🟡 | Owner: Place/Change and Collect prompts; visitors: Inspect |
+| §9.7 | World stays clear with many full plots; limit effects at distance | 🟡 | Particles and lights only within 70 studs (checked twice a second); billboards culled beyond 160 studs. Not profiled |
 
 ## §10 Passive income and offline earnings
 
@@ -183,8 +188,8 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §10.3 | No double-applied multipliers; no income maths in other scripts | ✅ | Client and server both call `Logic/Economy`. Tests |
 | §10.4 | Server is the source of truth | ✅ | `EconomyService` on the server |
 | §10.5 | Understandable **collection** of earnings: stands accumulate and are collected by interaction, or a central collector | ✅ | Both (decision Q3): per-stand accumulation with a cap, a per-stand COLLECT button, and a central COLLECT in the HUD. Collection pays once; fractions stay on the stand. Tests: `IncomeLedger.spec`. The physical stand prompt comes with A4 |
-| §10.6 | Inspect a displayed card: name, rarity, grade, base and effective income, **accumulated earnings**, bonuses | 🟠 | Stand tiles show income and the accumulated amount (collect button). No bonus breakdown or grade |
-| §10.7 | Collection animations and floating currency indicators | ⬜ | — |
+| §10.6 | Inspect a displayed card: name, rarity, grade, base and effective income, **accumulated earnings**, bonuses | 🟠 | Stands show uncollected earnings (billboard plus Collect prompt); Inspect shows name, rarity, variant and base income. No full panel with bonus breakdown or grade |
+| §10.7 | Collection animations and floating currency indicators | 🟠 | A floating "$X" earnings label over own stands. No collection animation yet |
 | §10.8 | No negative balances, duplicated payouts or client-awarded currency; every transaction validated; no client elapsed time | ✅ | `Wallet` (tests); server-only income; no client time |
 | §10.9 | Avoid frequent DataStore writes | ✅ | Currency is saved only on autosave or leave |
 | §10.10 | Offline earnings from the saved timestamp, capped | ✅ | `Income.LastOnline` (server time, updated every tick, so a crash can't double-count); offline time capped at `OfflineCapSeconds` (2 h, interim) and credited onto the stands for collection. Tests: `IncomeLedger.spec` |
@@ -268,9 +273,9 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 
 | Req | Requirement | Status | Evidence / gap |
 | --- | --- | --- | --- |
-| §18.1 | Areas: Spawn Plaza, Pack Shop, Grader, Trading Plaza, Upgrade Station, Daily Rewards, Event, Leaderboards, Player Plots, Collection Hall | ⬜ | No world |
-| §18.2 | Navigable without menus; signs; interactive stations | ⬜ | Everything is menu-driven |
-| §18.3 | Plots show owner, displayed cards, income, decorations, prestige; visitors can inspect; quick return to your own plot | ⬜ | — |
+| §18.1 | Areas: Spawn Plaza, Pack Shop, Grader, Trading Plaza, Upgrade Station, Daily Rewards, Event, Leaderboards, Player Plots, Collection Hall | 🟠 | Built: spawn plaza (monument and fountain), Pack Shop, Upgrade Station, central Collect All booth, reserved Grader, player plots. Not built: Trading Plaza, Daily Rewards, Event, Leaderboards, Collection Hall |
+| §18.2 | Navigable without menus; signs; interactive stations | 🟡 | Signs on every station and plot; station prompts open the Pack Shop and Upgrades, or collect all. Avenue and paths |
+| §18.3 | Plots show owner, displayed cards, income, decorations, prestige; visitors can inspect; quick return to your own plot | 🟠 | Owner sign, displayed cards, Inspect, MY PLOT button and spawn on own plot. No decorations or prestige indicators |
 
 ## §19 Selling
 
@@ -336,7 +341,7 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §27.1 | Server controls currency, ownership, rewards, placement, upgrades and selling | ✅ | Each one has a validated, server-side transaction. Tests |
 | §27.1 | Server controls grades, collection rewards, daily rewards, boosts, trading and paid rewards | ⬜ | Those systems don't exist yet |
 | §27.2 | Validate every remote input: identifiers, quantities, currency, capacity, card availability | ✅ | `Util/Validate` plus the per-transaction checks. Tests: `Util.spec`, `Gameplay.spec` |
-| §27.2 | Validate plot ownership, operation state and transaction uniqueness | ⬜ | No plots, operations or transaction ids yet |
+| §27.2 | Validate plot ownership, operation state and transaction uniqueness | 🟠 | Plot ownership is enforced by design (no remote takes plot or stand ids; tests for the allocator). No operation states or transaction ids yet |
 | §27.3 | Rate limiting on important remotes | ✅ | `Lib/Net` token buckets. Tests: `Util.spec` |
 | §27.4 | No arbitrary paths or functions in remotes; safe failures; logging of suspicious requests | 🟡 | Fixed remote set; `warn` on invalid requests; generic client errors |
 | §28.1 | Saved data: currency, cards, display, upgrades, discovered cards, binder progress, daily, quests, settings, stats, schema version | ✅ | `ProfileSchema` v1. Tests |
@@ -358,13 +363,13 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §31.1 | Card system tests: valid ids, rarities, pack references, variants | ✅ | `Config.spec`, `CardRegistry.spec` |
 | §31.2 | Pack tests: correct deduction, failed purchase charges nothing, exact reward, invalid ids rejected, repeated requests | 🟠 | Buy and open covered separately (`Gameplay.spec`, `Util.spec`). Server-side duplicate-request idempotency is still missing |
 | §31.3 | Inventory tests: unique ids, duplicates, capacity, invalid references | ✅ | `Inventory.spec` |
-| §31.4 | Plot tests | 🟠 | Double-display and removal (`Gameplay.spec`). No plot ownership or rejoin tests |
+| §31.4 | Plot tests | ✅ | `Plots.spec`: assignment, uniqueness, release, full capacity, non-owner checks, layout, stand states, replace and remove cleanup, duplicate display, income kept on swap, arrangement restored after save and rejoin |
 | §31.5 | Income tests: multipliers, no duplication, collection exploit, offline limits | ✅ | `Economy.spec`, `IncomeLedger.spec` (double collect, caps, offline cap, crash double-count) |
 | §31.6 | Grading tests | 🟠 | Pure helpers only |
 | §31.7 | Upgrade tests | ✅ | `Gameplay.spec`, `Economy.spec` |
 | §31.8 | Persistence tests | ✅ | `SessionStore.spec`, `ProfileSchema.spec` |
 | §31.9 | Monetization and trading tests | ⬜ | Systems don't exist |
-| §31.10 | Development-only test mode or commands, not exploitable in production | ⬜ | None in game. `scripts/simulate.luau` is offline only |
+| §31.10 | Development-only test mode or commands, not exploitable in production | ✅ | Studio-only `DevCommand` (remote never created on live servers); fixed command table; tests: `DevCommands.spec`. See `docs/DEVTOOLS.md` |
 | §32 | Initial balancing (starting cash $500, starter pack $100, free basic stand, rarity income bands) | ❌ | See [config differences](#configuration-differences) (C5, C10) |
 | §33.1 | Deliverables: README, how to run in Studio, changelog, remaining tasks | ✅ | `README.md`, `DEVLOG.md`, this file |
 | §33.2 | Guides: card creation, pack config, grading config, monetization config, DataStore testing, new artwork, new cards, new collection sets | 🟠 | DataStore testing is in `TESTING.md`; config conventions are in `ARCHITECTURE.md`. The dedicated guides are missing |
@@ -381,7 +386,7 @@ change. **No working system was changed during this audit.** The fixes are sched
 | --- | --- | --- | --- | --- |
 | C1 | ~~No unopened-pack inventory~~ **Resolved:** packs go to inventory and open on demand (decision Q1) | §3.3 starter **packs**; §13 and §17 grant packs as rewards; §7.5 opening sequence | Add owned packs (`Packs: { [packId]: count }`), an `OpenPack` remote, and starter packs. The shop may keep "buy and open" as a shortcut (Q1) | Additive field. `reconcile` adds it; no version bump |
 | C2 | Instant grid reveal | §7.5 pack, blur, animation, open, flip, rarity effects, skip option | A new opening sequence controller, plus a results screen and a skip setting | None (Settings gains `SkipAnimations`, additive) |
-| C3 | Stands exist only as a UI list | §8 physical stands on a personal plot, with interaction | `PlotService` (claim and release, per-server plot assignment), physical stand models, ProximityPrompt interaction. Reuse `Logic/Display` and the saved `Display` map unchanged | None: `Display` slot → instance already persists the arrangement |
+| C3 | ~~Stands exist only as a UI list~~ **Resolved (needs Studio verification):** physical plots with 12 stands each, auto-assigned; My Stands stays as a management window over the same data | §8 physical stands on a personal plot, with interaction | `PlotService` (claim and release, per-server plot assignment), physical stand models, ProximityPrompt interaction. Reuse `Logic/Display` and the saved `Display` map unchanged | None: `Display` slot → instance already persists the arrangement |
 | C4 | ~~Income auto-credited~~ **Resolved in logic and UI:** stands accumulate; collect per stand or centrally (Q3). Collecting at a physical stand waits for C3 | §10 stands accumulate; the player **collects**; the Auto-Collection upgrade or pass and the Collection Radius upgrade imply manual collection by default | Track uncollected earnings per stand on the server; add a `CollectEarnings` remote (by stand, or all within radius); credit Cash only on collection | Additive (pending earnings) if uncollected earnings must survive a rejoin (Q3) |
 | C5 | ~~1,500 Cash plus starter cards~~ **Resolved:** $500 plus 3 starter packs | §3.3 starter currency **and starter packs**; §32 starting cash $500 | Grant $500 plus N starter packs (count to be decided); the tutorial guides opening and placing | Existing profiles keep their grant (`Flags.StarterGranted`). Only testers' data exists |
 | C6 | Collection bonus is the only binder reward | §13 one-time claimable rewards (cash, packs, variants, decorations, titles, badges, slots) | Add a `ClaimBinderReward` remote using the reserved `Collections.Claimed`. Keep the income bonus as one reward type | None (field reserved) |
@@ -392,7 +397,7 @@ change. **No working system was changed during this audit.** The fixes are sched
 | C11 | Backpack, Stands and Binder rebuild every tile on every change | §14.4 no rendering of every card at once; §29 no full rebuilds | Grouped and virtualised grid (one tile per CardId and variant with counts, rendered on demand); incremental updates | None |
 | C12 | Currency HUD on the left-middle | §24 TOP AREA holds cash, income/s and currencies | Move the stats cluster to the top bar; add the missing side-nav entries as features land | None |
 | C13 | Extra `SellBonus` upgrade; 6 of the 10 spec upgrades missing | §15 initial upgrade list | Add the missing upgrades as their systems land. Owner decision (Q8) on keeping SellBonus | Removing it: refund the cumulative cost and drop `Upgrades.SellBonus` (version bump) |
-| C14 | Phase order diverged | §30 Phase 2 = plots, stands, illustrations, income | Finish the spec's Phase 2 before more Phase 3 or 4 work (ROADMAP Phase A) | — |
+| C14 | ~~Phase order diverged~~ **Mostly resolved:** the spec Phase 2 items (plots, stands, illustrations, income) now exist; the opening sequence and rebalancing remain | §30 Phase 2 = plots, stands, illustrations, income | Finish the spec's Phase 2 before more Phase 3 or 4 work (ROADMAP Phase A) | — |
 | C15 | ~~Pack buy buttons ignore affordability~~ (resolved); still no purchase confirmation | §7.3 | Grey out unaffordable packs; confirm large purchases | None |
 | C16 | No server-side request idempotency | §7.4, §27 "transaction uniqueness"; §31 "repeated requests do not grant duplicate rewards" | Optional client request id on purchase and grade remotes, de-duplicated per session on the server | None |
 
@@ -446,6 +451,8 @@ irreversible decision. Q1–Q4 are now decided (above).
 
 | # | Question | Spec evidence | Interim position |
 | --- | --- | --- | --- |
+| Q14 | **Pack 1 printed values vs the economy.** The art prints incomes (Uncommon 70/s up to Mythic 1,500/s) above the spec's §32 guideline bands (Uncommon $10–30, Rare $30–100, Epic $100–300) and far above the 36 placeholder cards (from 1/s). | §32 calls its bands guidelines; the art is the owner's content | The card config follows the art. Pack 1 is the first and starter pack ($1,500; sale value 2× income, so packs can't be resold at a profit). The placeholder catalog is now economically pointless next to Pack 1: **A8 must re-band or retire it** (owner to decide) |
+| Q15 | The pack art's logo reads **"FERRET FRENZY"**, while the spec names the game "Ferret Card Tycoon" | §1, §2 | Art unchanged; owner to confirm the brand name |
 | Q5 | What do "species" and "personalities" mean? | §3.5 and the §4 Species field | Species stays a descriptive field. Personality could become a Tag (§4.3) |
 | Q6 | Can displayed cards be graded? Can graded cards be re-graded, and if so does a lower result replace the grade? | §11.7 "if the grading rules prohibit…"; the UI shows "current grade, if already graded" | Require removal from the stand; allow re-grading, where the new grade replaces the old (the spec states the risk); make it configurable |
 | Q7 | Keep the player level and XP system (not in the spec)? | The spec has no levels; its unlocks are card `UnlockRequirements`, events and progression | Keep it as a pacing gate for now. Don't extend it until the owner decides |
@@ -512,17 +519,29 @@ published, as far as the repository shows.
 For reference, here is what the code contains. The status of each item is given by the
 audit above.
 
-- **Shared logic:** `CardRegistry`, `Economy`, `Progression`, `Collections`, `PackRoller`,
-  `Grading` (helpers only), `Wallet`, `Inventory`, `Account`, `PackShop`, `Display`,
-  `Market`, `UpgradeShop`, `ConfigCheck`, `ProfileSchema`, and utilities (`WeightedRandom`,
-  `Validate`, `RateLimiter`, `Signal`, `Format`).
+- **Shared config:** `Game`, `Economy`, `Rarities`, `Variants`, `Collections`, `Cards` (6
+  Pack 1 cards with real art plus 36 placeholders), `Packs` (Pack 1 plus 6 placeholder
+  packs), `Grading`, `Upgrades`, `Monetization`, `Assets` (the artwork mapping), `World`
+  (layout) and `Visuals` (palette, illustration and rarity effects).
+- **Shared logic:** `CardRegistry`, `CardArt`, `Economy`, `IncomeLedger`, `Progression`,
+  `Collections`, `PackRoller`, `PackShop`, `Grading` (helpers only), `Wallet`,
+  `Inventory`, `Account`, `Display`, `Market`, `UpgradeShop`, `PlotAllocator`,
+  `PlotLayout`, `PlotView`, `ConfigCheck`, `ProfileSchema`, and utilities.
 - **Server:**
-  - Libraries: `SessionStore`, `MockDataStore`, `Net`.
+  - Libraries: `SessionStore`, `MockDataStore`, `Net`, `DevCommands`.
+  - `World/WorldBuilder`.
   - Services: `DataService`, `SettingsService`, `PackService`, `CardService`,
-    `UpgradeService`, `EconomyService`.
-- **Client:** HUD, notifications, and the Settings, Packs (with reveal), Backpack, My
-  Stands, Upgrades and Binder windows.
-- **Tests:** 113 Lune tests across config, rolls, economy, progression, schema, inventory
-  and account, gameplay transactions, utilities, grading helpers, SessionStore and the
-  built-place structure. CI runs the full Roblox-std Selene.
-- **Tools:** `scripts/check.sh`, `scripts/install-tools.sh`, `scripts/simulate.luau`.
+    `UpgradeService`, `EconomyService`, `WorldService`, `PlotService`, `DevService`
+    (Studio only).
+- **Client controllers:** Data, Notification, HUD (with MY PLOT), Settings, Packs (with
+  reveal), Backpack (including stand-target mode), Display (My Stands), Upgrades, Binder,
+  StandVisuals (3D illustrations), Plot (stand prompts), World (station prompts) and Dev
+  (Studio only).
+- **Assets:**
+  - `assets/source/Pack 1` (originals).
+  - `assets/processed/pack1` (upload-ready copies).
+  - `scripts/assets/process_card_art.py`.
+- **Tests:** 179 Lune tests: 16 unit spec files plus the built-place structure check. CI runs
+  the full Roblox-std Selene.
+- **Tools:** `scripts/check.sh`, `scripts/install-tools.sh`, `scripts/simulate.luau`, and the
+  Studio developer commands (`docs/DEVTOOLS.md`).

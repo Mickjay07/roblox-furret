@@ -116,6 +116,8 @@ The checklist has two parts:
       `default.project.json`.
 - [ ] Play: the Output shows `[Server] Ferret Card Tycoon started (N services)` with **no**
       `[Config]` warnings and no errors.
+- [ ] The Studio "Baseplate" template's floor and SpawnLocation are removed at runtime, and
+      the generated world appears (`Workspace.World`, `Workspace.Plots`).
 - [ ] `ReplicatedStorage.Remotes` contains every name listed in `Shared/Remotes.luau`.
 
 ### 1.2 Persistence: mock store (API access OFF)
@@ -125,8 +127,9 @@ The checklist has two parts:
       never touches real data.
 
 ### 1.3 Persistence: real DataStore (API access ON, test place)
-- [ ] First join: welcome toast; 500 cash; 3 Burrow Packs owned (PACKS window shows
-      "OPEN (3)"); no cards yet; HUD shows +0 CASH/S and NOTHING TO COLLECT.
+- [ ] First join: welcome toast; 500 cash; 3 Pack 1 packs owned (PACKS window shows
+      "OPEN (3)"); no cards yet; HUD shows +0 CASH/S and NOTHING TO COLLECT; you spawn on
+      your own plot.
 - [ ] Open a pack, buy a pack (keep it unopened), place a card, let a stand accumulate,
       buy an upgrade, change a setting, then Stop. Play again: cards, unopened packs,
       stands, uncollected stand earnings, upgrade levels, cash, settings and level all
@@ -178,7 +181,7 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
 - [ ] Settings: volume steps, Notifications toggle (non-error toasts stop) and Reduced
       Motion persist across rejoin.
 
-### 1.6 Current core loop (UI-only stands, an interim design: C3)
+### 1.6 Core loop through menus (My Stands stays as a management window)
 - [ ] PACKS: OPEN on a starter pack reveals **5** cards with "1 IN X" and NEW! badges, and
       the owned count drops by one. Tapping closes the reveal.
 - [ ] BUY adds packs to the owned count without opening them (toast "Bought …"), and cash
@@ -206,38 +209,63 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
 - [ ] On phone and tablet emulation, the HUD, windows and reveal fit on screen, and buttons
       can be tapped.
 
+### 1.8 World (§18, roadmap A2)
+- [ ] The plaza (monument and fountain), avenue, four stations with readable signs, lamps,
+      trees and warm lighting all appear; nothing floats or z-fights.
+- [ ] Station prompts: Pack Shop opens PACKS; Upgrades opens UPGRADES; Collect All collects
+      every stand; Grader says it's coming soon.
+- [ ] The frame rate stays acceptable on phone emulation.
+
+### 1.9 Plots and stands (§8, roadmap A3–A4; run with 2 players in Clients and Servers)
+- [ ] Each player is given a different plot automatically, spawns on it, and the entrance
+      sign shows their name. Free plots are grey and read "FREE PLOT".
+- [ ] When a player leaves, their plot returns to FREE PLOT, and all illustrations and
+      prompts on it disappear.
+- [ ] Full server: set *Max Players* above 8 (or block plots with test players). The 9th
+      player gets the "All plots on this server are taken" toast and can still play
+      through the menus; no errors.
+- [ ] Own stand: the prompt "Place card" opens the backpack titled "PICK FOR STAND #N"; PLACE
+      ON STAND #N puts the card there. "Change card" swaps it, and the old card returns to
+      the backpack. A card already on another stand moves.
+- [ ] Locked stands (5–12 before upgrades) look greyed out; their prompt opens Upgrades.
+      Buying Display Stands unlocks the next stand physically.
+- [ ] Another player's stand only offers "Inspect". From player B's client command bar,
+      `PlaceCard` and `CollectEarnings` only ever affect player B's own plot (probes in
+      1.4).
+- [ ] My Stands, the physical stands and the `stands` dev command always agree.
+- [ ] Rejoin (real DataStores): the same cards are back on the same stands, with
+      uncollected earnings intact.
+
+### 1.10 Ferret illustrations (§9, roadmap A5)
+- [ ] **Before the art is uploaded** (`AssetId = 0`): each occupied stand shows a floating
+      placeholder card (rarity colour, name, income), and nothing errors.
+- [ ] **After the upload** (assets/README.md): the six Pack 1 cards show their real art above
+      the stands, in the backpack, in the reveal and in the pack shop (pack front). The art
+      isn't stretched, and there's no see-through tint or checkerboard.
+- [ ] The illustration floats gently and faces the camera; Reduced Motion stops the float.
+- [ ] Use `card pack1_sky`, `card pack1_kingston`, `card pack1_aurora` (or `pack1_frost`) and
+      `card pack1_boba` on stands: Epic glows purple; Legendary has gold sparkles plus glow;
+      Mythic has a pink aura; Rare has light blue sparkles. Effects stop beyond about 70
+      studs, and illustrations disappear beyond about 160.
+- [ ] Removing a card or leaving the game leaves no stray billboards or particles under
+      `Workspace.Plots` (check the Explorer on the client).
+
+### 1.11 Stand income in the world (§10)
+- [ ] Own stands with earnings show a green "$X" label and a "Collect $X" prompt (key F).
+      Collecting pays exactly that once.
+- [ ] The Collect All booth, the HUD COLLECT button and COLLECT ALL in My Stands all
+      collect everything once.
+- [ ] Swapping the card on a stand keeps the stand's uncollected earnings.
+
+### 1.12 Developer tools (docs/DEVTOOLS.md)
+- [ ] In Studio, the Output shows `[Dev] Developer commands enabled`, and the DEV button
+      opens the panel. Every quick button returns a result.
+- [ ] `roll pack1 20000`: rolled rarities match the expected percentages within about 1%.
+- [ ] **Live-server check** (published test experience, not Studio): there is no DEV button,
+      and `game.ReplicatedStorage.Remotes:FindFirstChild("DevCommand")` returns nil in the
+      client console.
+
 ## Part 2: specification features (run when implemented)
-
-### 2.1 Plots (§8, roadmap A3)
-- [ ] On join, the player can claim an unowned plot; the owner's name appears on it; owned
-      and unowned plots look different.
-- [ ] Two players can't claim the same plot. Leaving releases the plot.
-- [ ] From player B's client command bar, a placement or collection request targeting
-      player A's plot or stand is refused (§8.8, §31).
-- [ ] "Return to my plot" works from anywhere.
-
-### 2.2 Stands and 2D ferret illustrations (§8–9, roadmap A4–A5)
-- [ ] Approach a stand: a prompt appears; selecting a card places it; the ferret
-      illustration appears above the stand, faces the camera and keeps its aspect ratio.
-- [ ] Replacing the card updates the illustration; removing it makes the illustration
-      disappear, with no leftover objects in the Explorer.
-- [ ] The same card can't be on two stands (a placement request for an already-displayed
-      card moves it).
-- [ ] Rejoin: the arrangement and illustrations are restored exactly.
-- [ ] Rarity effects match §9 (Rare blue particles, Epic purple glow, Legendary gold
-      sparkles, …), and Reduced Effects tones them down.
-- [ ] With 2 players and full plots, effects on distant plots are reduced, and the frame
-      rate stays acceptable on phone emulation.
-
-### 2.3 Income, collection and offline earnings at physical stands (§10, roadmap A6 remainder)
-- [ ] Approaching a stand shows its accumulated earnings; the collect prompt pays exactly
-      that amount once; floating "+$" indicators appear.
-- [ ] Spamming the collect remote from the command bar never pays more than was
-      accumulated.
-- [ ] Changing the local clock has no effect on earnings.
-- [ ] Offline: leave, use the developer tool to fast-forward time (or wait), rejoin. The
-      offline payout is shown, matches displayed income × time, and is capped at the
-      configured limit.
 
 ### 2.4 Pack opening sequence (§7.5, roadmap A7 remainder)
 - [ ] Opening a pack plays the sequence (pack, blur, open, flip, rarity effect), and the

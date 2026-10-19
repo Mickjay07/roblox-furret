@@ -3,6 +3,95 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Phase A1–A3: developer tools, 3D world, physical plots, Pack 1 art
+
+**Input**
+- The owner uploaded the Pack 1 art (`Pack 1/`: six cards and `obal.png`, the pack front).
+
+**Art (`assets/README.md`)**
+- **Inspection** (all seven files are 1024×1536 PNG, RGBA):
+  - The transparency is real, with no baked checkerboard.
+  - The card images are complete printed cards: frame, rarity, name, subtitle, printed
+    income and number.
+  - Five of them have the card body at alpha 251–253 (about 1% see-through).
+  - The pack logo reads "FERRET FRENZY" (owner question Q15).
+- **Originals** moved byte-identical to `assets/source/Pack 1/`.
+- **Processed copies:** `scripts/assets/process_card_art.py` writes them to
+  `assets/processed/pack1/` (683×1024; alpha ≥ 250 snapped to opaque; corner check), about
+  1 MB each.
+- **Mapping:** `Config/Assets` is the single artwork mapping (`AssetId = 0` until uploaded),
+  resolved by `Logic/CardArt` with a placeholder fallback.
+- **Cards:** six new definitions, `pack1_sandy` … `pack1_frost`, numbered #001–#006 and
+  matching the printed rarity, income and subtitle.
+- **Pack 1 economics:**
+  - Pack 1 (pack front `obal.png`) is now the first and starter pack.
+  - Sale value is set to 2× income, and the price to $1,500, so it can't be resold at a
+    profit.
+  - A new config test enforces that rule for every pack (it replaced the "sorted by price"
+    test).
+- **Art not on Roblox yet:** the cloud environment cannot upload assets to Roblox, so the
+  exact manual upload steps are documented.
+
+**A1 developer tools (`docs/DEVTOOLS.md`)**
+- Pure `server/Lib/DevCommands`: a fixed command table with parsed, range-checked
+  arguments and no code execution. Commands: cash, setcash, packs, card, allcards, level,
+  accrue, offline, roll (distribution vs configured odds, without granting), stands,
+  income, data, reset.
+- `DevService` handles plots, save and home. It creates the `DevCommand` remote **only in
+  Studio**, so it doesn't exist on live servers.
+- `DevController` adds a DEV panel. `DataService` gained `KeyChanged`, `SaveNow` and
+  `Diagnostics`; `Net` gained optional remotes.
+
+**A2 world**
+- `Config/World` (layout) and `Config/Visuals` (palette, illustration settings, rarity
+  effects).
+- `server/World/WorldBuilder` builds:
+  - ground;
+  - a spawn plaza with a fountain and a "FERRET CARD TYCOON" monument;
+  - the avenue and paths;
+  - the Pack Shop, Upgrades and Collect All stations, and a reserved Grader;
+  - lamps and trees;
+  - Atmosphere and colour correction.
+- It removes the Baseplate template.
+
+**A3 plots and stands**
+- **Pure modules** (all tested): `Logic/PlotAllocator` (automatic, unique ownership, release,
+  full capacity), `Logic/PlotLayout` (8 plots, 12 stands each) and `Logic/PlotView` (stand
+  state from saved data).
+- **`PlotService`:**
+  - Assigns plots only after a safe data load.
+  - Shows owner signs and spawns players on their own plot.
+  - Adds the MY PLOT teleport (`TeleportHome` remote).
+  - Mirrors `Display` onto the stand attributes, with locked-stand visuals.
+  - Handles a full server with a toast.
+- **Client:**
+  - `StandVisualsController`: floating art or placeholder, aspect ratio kept, shared float
+    loop, rarity effects near the camera, cleanup.
+  - `PlotController`: Place/Change card, Collect $X and Inspect prompts, plus "$X" labels.
+  - `WorldController`: station prompts.
+  - Backpack: a "PICK FOR STAND #N" mode.
+  - `CardTile` and the pack shop show the uploaded art when an asset id exists.
+
+**Integration with existing systems:** no new income formula. Stands use `IncomeLedger` and
+`CollectEarnings`, and placement uses `PlaceCard`. No schema change was needed: the physical
+stands mirror the saved `Display` map.
+
+**Verified (cloud container)**
+- `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: StyLua, Selene (offline std), Rojo build
+  and luau-lsp strict (0 errors) all pass.
+- Lune: **179 passed, 0 failed**. New test files: `DevCommands.spec` (11), `Plots.spec`
+  (14), `CardArt.spec` (7), plus new place-structure entries.
+- `scripts/simulate.luau`: the Pack 1 starter gives about 1,580/s at once, and every pack
+  unlocks within about 1 h. **The economy needs A8** (Q14).
+
+**Not verified**
+- **No Roblox Studio session has been run.** The world's look and feel, the prompts, the
+  billboards and effects, plot assignment with real players, and persistence of the
+  arrangement in a real DataStore are all untested at runtime. The checklist is in
+  TESTING.md 1.8–1.12.
+- **The art isn't uploaded yet**, so everything in game shows placeholders until the asset
+  ids are filled in.
+
 ## 2026-10-19: Owner decisions Q1–Q4 applied (start of Phase A)
 
 **Decisions** (owner, in Czech; recorded in `docs/STATUS.md`):
