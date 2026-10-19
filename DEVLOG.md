@@ -3,6 +3,54 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Multi Opening switched to Game Passes
+
+**Problem:** both Multi Opening ids (2038324873 for 3x, 2039938706 for 6x) are **game
+passes**. The previous implementation treated them as Developer Products:
+`GetProductInfo(InfoType.Product)` failed, so both buttons showed UNAVAILABLE, and purchases
+would have relied on `ProcessReceipt`, which never fires for passes.
+
+**Fix**
+- `Config/Monetization.MultiOpen` uses `GamePassId`. Only the 3x price (100) is in config,
+  as a design value to compare; the 6x price is read from Roblox.
+- **Removed the Developer Product path:** `Lib/ReceiptProcessor`, the `ProcessReceipt`
+  handler and `PromptProductPurchase`. They served only these two ids; no other Developer
+  Product was handled, and the Treats products stay id-0 placeholders. `Purchases.Receipts`
+  stays reserved for future Developer Products.
+- **New pure `Lib/GamePassOwnership`:** UserOwnsGamePassAsync results (with retries) are
+  mirrored into `Purchases.Entitlements`.
+  - Confirmed "owned" sets the entry, and confirmed "not owned" removes it.
+  - A failed or malformed answer changes nothing: no pass is lost or granted during an
+    outage.
+- **`MonetizationService` (rewritten):**
+  - **On join** (profile loaded, plus profiles that loaded first): it checks every pass. On
+    failure it retries in the background (20/60/180/600 s), and the `GamePassesVerified`
+    player attribute makes the UI show `CHECKING...` instead of `UNLOCK`.
+  - **Purchase:** the `PromptMultiOpen` remote enforces 6x → 3x on the server, then calls
+    `PromptGamePassPurchase`. On the server-side `PromptGamePassPurchaseFinished` with
+    wasPurchased, ownership is re-checked with Roblox (4 attempts). Only a confirmed answer
+    is recorded; if it isn't confirmed yet, the player is told so and it re-checks after
+    15 s.
+  - **6x without 3x:** the pass stays recorded (it's the player's real ownership) and the
+    player is told it activates once they own 3x. It is never reported as activated.
+  - **Pass info:** `GetProductInfo(id, Enum.InfoType.GamePass)` is read at start. It checks
+    IsForSale and the price (logs a warning if 3x ≠ 100), and publishes Price/Available for
+    the shop.
+- Openings, reveals, pack consumption, rewards, saving, Shiny and image ids are unchanged.
+
+**Tests:** `MultiOpening.spec`: the receipt tests were replaced by 13 game pass tests:
+- confirmed ownership is recorded and removed;
+- API failure keeps cached ownership and never grants; retries with pauses; a malformed
+  answer counts as a failure;
+- purchase completion, confirmed and unconfirmed;
+- 6x without 3x: kept, not activated, and activates later without rebuying;
+- purchase offers and the prerequisite;
+- pass info: for sale at 100, price mismatch, 6x price read from Roblox, off sale or
+  unreadable.
+
+`SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: all checks passed, 253 tests. **Not run in
+Studio:** TESTING.md §1.14.
+
 ## 2026-10-19: Manual pack opening, card back, 3x/6x Multi Opening, image loading
 
 **A. Image loading: findings first (code inspection; no Studio measurements yet)**

@@ -1,5 +1,5 @@
--- Multi Opening (3x / 6x Developer Products), the manual synchronised reveal order, receipt
--- idempotency and the shared card back.
+-- Multi Opening (3x / 6x game passes): ownership from Roblox, purchase completion, the 6x
+-- prerequisite and API failures; the manual synchronised reveal order; the card back.
 local TestKit = require("../TestKit")
 local Loader = require("../Loader")
 local describe, it, expect = TestKit.describe, TestKit.it, TestKit.expect
@@ -12,7 +12,7 @@ local Inventory = Loader.require("src/shared/Logic/Inventory")
 local PackShop = Loader.require("src/shared/Logic/PackShop")
 local RevealPlan = Loader.require("src/shared/Logic/RevealPlan")
 local PackOpenRequests = Loader.require("src/server/Lib/PackOpenRequests")
-local ReceiptProcessor = Loader.require("src/server/Lib/ReceiptProcessor")
+local GamePassOwnership = Loader.require("src/server/Lib/GamePassOwnership")
 
 local USER = 42
 local ID3 = 2038324873
@@ -68,12 +68,15 @@ describe("Shared card back asset", function()
 end)
 
 describe("Entitlements: unlock prerequisites", function()
-	it("configures the two Developer Products as 3x then 6x", function()
-		expect(Entitlements.product("MultiOpen3").ProductId).toBe(ID3)
-		expect(Entitlements.product("MultiOpen6").ProductId).toBe(ID6)
+	it("configures the two game passes as 3x then 6x, with only 3x's price in config", function()
+		expect(Entitlements.product("MultiOpen3").GamePassId).toBe(ID3)
+		expect(Entitlements.product("MultiOpen6").GamePassId).toBe(ID6)
 		expect(Entitlements.product("MultiOpen6").Requires).toBe("MultiOpen3")
-		expect(Entitlements.productById(ID6).Key).toBe("MultiOpen6")
-		expect(Entitlements.productById(1)).toBeNil()
+		expect(Entitlements.product("MultiOpen3").ExpectedPriceRobux).toBe(100)
+		expect(Entitlements.product("MultiOpen6").ExpectedPriceRobux).toBeNil()
+		expect(Entitlements.productByPassId(ID6).Key).toBe("MultiOpen6")
+		expect(Entitlements.productByPassId(1)).toBeNil()
+		expect((Config.Monetization.MultiOpen.MultiOpen3 :: any).ProductId).toBeNil()
 	end)
 
 	it("allows 1 pack always, 3x with MultiOpen3, and 6x only with both", function()
@@ -114,91 +117,154 @@ describe("Entitlements: unlock prerequisites", function()
 	end)
 end)
 
-describe("ReceiptProcessor: Developer Product receipts", function()
-	local function receipt(purchaseId: string, productId: number)
-		return { PurchaseId = purchaseId, ProductId = productId, PlayerId = USER }
+-- Fake UserOwnsGamePassAsync: `owned` maps pass id -> boolean; `fails` makes the first N
+-- calls error like an API outage. Returns the query and a call counter.
+local function fakeQuery(owned: { [number]: boolean }, fails: number?)
+	local calls = 0
+	local query = function(_userId: number, passId: number)
+		calls += 1
+		if fails and calls <= fails then
+			return false, "HTTP 503 (Service Unavailable)"
+		end
+		return true, owned[passId] == true
 	end
+	return query, function()
+		return calls
+	end
+end
 
-	it("grants the entitlement and records the receipt", function()
-		local data = player(0)
-		local outcome = ReceiptProcessor.process(data, receipt("p1", ID3), 100)
-		expect(outcome.Decision).toBe("Granted")
-		expect(outcome.NewEntitlement).toBe(true)
+describe("GamePassOwnership: ownership from Roblox", function()
+	it("records passes Roblox confirms and removes passes it confirms are not owned", function()
+		local data = player(0, { "MultiOpen6" })
+		local query = fakeQuery({ [ID3] = true, [ID6] = false })
+		local results, changed, verified = GamePassOwnership.refreshAll(data, USER, query, 3)
+		expect(results.MultiOpen3).toBe("owned")
+		expect(results.MultiOpen6).toBe("notOwned")
+		expect(changed).toBe(true)
+		expect(verified).toBe(true)
 		expect(data.Purchases.Entitlements.MultiOpen3).toBe(true)
-		expect(data.Purchases.Receipts.p1).toBe(100)
+		expect(data.Purchases.Entitlements.MultiOpen6).toBeNil()
+		expect(Entitlements.canUseMode(data, 3)).toBe(true)
 	end)
 
-	it("treats a repeated PurchaseId as a duplicate and grants nothing twice", function()
-		local data = player(0)
-		ReceiptProcessor.process(data, receipt("p1", ID3), 100)
-		data.Purchases.Entitlements.MultiOpen3 = nil -- detect any second grant
-		local again = ReceiptProcessor.process(data, receipt("p1", ID3), 200)
-		expect(again.Decision).toBe("Duplicate")
-		expect(data.Purchases.Entitlements.MultiOpen3).toBeNil()
-		expect(data.Purchases.Receipts.p1).toBe(100)
-	end)
-
-	it("leaves unknown products for another handler", function()
-		local data = player(0)
-		local outcome = ReceiptProcessor.process(data, receipt("p9", 123), 100)
-		expect(outcome.Decision).toBe("Unknown")
-		expect(data.Purchases.Receipts.p9).toBeNil()
-	end)
-
-	it("records a 6x receipt without 3x but flags the missing prerequisite", function()
-		local data = player(0)
-		local outcome = ReceiptProcessor.process(data, receipt("p6", ID6), 100)
-		expect(outcome.Decision).toBe("Granted")
-		expect(outcome.MissingPrerequisite).toBe(true)
-		expect(Entitlements.canUseMode(data, 6)).toBe(false)
-		ReceiptProcessor.process(data, receipt("p3", ID3), 101)
+	it("never concludes 'not owned' when the API fails: cached ownership is kept", function()
+		local data = player(0, { "MultiOpen3", "MultiOpen6" })
+		local query = fakeQuery({}, 1000)
+		local results, changed, verified = GamePassOwnership.refreshAll(data, USER, query, 3)
+		expect(results.MultiOpen3).toBe("failed")
+		expect(changed).toBe(false)
+		expect(verified).toBe(false)
 		expect(Entitlements.canUseMode(data, 6)).toBe(true)
 	end)
 
-	it("reverts a grant whose save failed so the retried receipt grants it", function()
+	it("never grants a pass from a failed query", function()
 		local data = player(0)
-		local r = receipt("p1", ID3)
-		local outcome = ReceiptProcessor.process(data, r, 100)
-		ReceiptProcessor.revert(data, r, outcome)
-		expect(data.Purchases.Receipts.p1).toBeNil()
+		local query = fakeQuery({ [ID3] = true }, 1000)
+		GamePassOwnership.refreshAll(data, USER, query, 2)
 		expect(data.Purchases.Entitlements.MultiOpen3).toBeNil()
-		expect(ReceiptProcessor.process(data, r, 101).Decision).toBe("Granted")
-		expect(data.Purchases.Entitlements.MultiOpen3).toBe(true)
 	end)
 
-	it("does not revoke an entitlement that was already owned when reverting", function()
-		local data = player(0, { "MultiOpen3" })
-		local r = receipt("p2", ID3)
-		local outcome = ReceiptProcessor.process(data, r, 100)
-		expect(outcome.NewEntitlement).toBe(false)
-		ReceiptProcessor.revert(data, r, outcome)
-		expect(data.Purchases.Entitlements.MultiOpen3).toBe(true)
+	it("retries a failing query and pauses between attempts", function()
+		local query, calls = fakeQuery({ [ID3] = true }, 2)
+		local pauses = {}
+		local result = GamePassOwnership.check(query, USER, ID3, 3, function(attempt)
+			table.insert(pauses, attempt)
+		end)
+		expect(result).toBe("owned")
+		expect(calls()).toBe(3)
+		expect(table.concat(pauses, ",")).toBe("1,2")
+		local failing = fakeQuery({}, 1000)
+		expect(GamePassOwnership.check(failing, USER, ID3, 2)).toBe("failed")
 	end)
 
-	it("keeps at most MAX_RECEIPTS receipt ids, dropping the oldest", function()
+	it("treats a malformed answer as a failure, not as 'not owned'", function()
+		local query = function()
+			return true, nil
+		end
+		expect(GamePassOwnership.check(query, USER, ID3, 1)).toBe("failed")
+	end)
+end)
+
+describe("GamePassOwnership: purchase completion and the 6x prerequisite", function()
+	it("activates 3x after a purchase Roblox confirms", function()
 		local data = player(0)
-		for i = 1, ReceiptProcessor.MAX_RECEIPTS + 5 do
-			ReceiptProcessor.process(data, receipt(`r{i}`, ID3), i)
-		end
-		local count = 0
-		for _ in data.Purchases.Receipts do
-			count += 1
-		end
-		expect(count).toBe(ReceiptProcessor.MAX_RECEIPTS)
-		expect(data.Purchases.Receipts.r1).toBeNil()
-		expect(data.Purchases.Receipts[`r{ReceiptProcessor.MAX_RECEIPTS + 5}`] ~= nil).toBe(true)
+		local product = Entitlements.product("MultiOpen3")
+		local result = GamePassOwnership.check(fakeQuery({ [ID3] = true }), USER, ID3, 3)
+		GamePassOwnership.apply(data, product.Key, result)
+		local kind, message = GamePassOwnership.purchaseMessage(data, product, result)
+		expect(kind).toBe("success")
+		expect(string.find(message, "activated", 1, true) ~= nil).toBe(true)
+		expect(Entitlements.canUseMode(data, 3)).toBe(true)
 	end)
 
-	it("verifies the configured product type and price from GetProductInfo", function()
+	it("does not activate anything while Roblox hasn't confirmed the purchase", function()
+		local data = player(0)
+		local product = Entitlements.product("MultiOpen3")
+		local result = GamePassOwnership.check(fakeQuery({}, 1000), USER, ID3, 2)
+		expect(GamePassOwnership.apply(data, product.Key, result)).toBe(false)
+		local kind, message = GamePassOwnership.purchaseMessage(data, product, result)
+		expect(kind).toBe("info")
+		expect(string.find(message, "activated", 1, true)).toBeNil()
+		expect(Entitlements.canUseMode(data, 3)).toBe(false)
+	end)
+
+	it("keeps a 6x pass bought without 3x but does not report it as activated", function()
+		local data = player(0)
+		local product = Entitlements.product("MultiOpen6")
+		local result = GamePassOwnership.check(fakeQuery({ [ID6] = true }), USER, ID6, 1)
+		GamePassOwnership.apply(data, product.Key, result)
+		expect(data.Purchases.Entitlements.MultiOpen6).toBe(true)
+		expect(Entitlements.canUseMode(data, 6)).toBe(false)
+		local kind, message = GamePassOwnership.purchaseMessage(data, product, result)
+		expect(kind).toBe("warning")
+		expect(string.find(message, "activates once you also own 3x Multi Opening", 1, true) ~= nil).toBe(true)
+		expect(string.find(message, "activated!", 1, true)).toBeNil()
+		-- Buying 3x afterwards activates 6x without buying 6x again.
+		GamePassOwnership.apply(data, "MultiOpen3", "owned")
+		expect(Entitlements.canUseMode(data, 6)).toBe(true)
+		local okKind = GamePassOwnership.purchaseMessage(data, product, "owned")
+		expect(okKind).toBe("success")
+	end)
+
+	it("does not offer 6x before 3x and never re-offers an owned pass", function()
+		local data = player(0)
+		expect((Entitlements.canPurchase(data, "MultiOpen6"))).toBe(false)
+		GamePassOwnership.apply(data, "MultiOpen3", "owned")
+		expect((Entitlements.canPurchase(data, "MultiOpen3"))).toBe(false)
+		expect((Entitlements.canPurchase(data, "MultiOpen6"))).toBe(true)
+	end)
+end)
+
+describe("GamePassOwnership: game pass info", function()
+	it("accepts 3x when it is for sale at 100 Robux", function()
 		local three = Entitlements.product("MultiOpen3")
-		local ok, message = ReceiptProcessor.checkProductInfo(three, { Name = "3x", PriceInRobux = 100 })
-		expect(ok).toBe(true)
-		expect(string.find(message, "Developer Product, 100 Robux", 1, true) ~= nil).toBe(true)
-		local okPrice, priceMessage = ReceiptProcessor.checkProductInfo(three, { Name = "3x", PriceInRobux = 80 })
-		expect(okPrice).toBe(true)
-		expect(string.find(priceMessage, "design says 100", 1, true) ~= nil).toBe(true)
-		expect((ReceiptProcessor.checkProductInfo(three, nil))).toBe(false)
-		expect((ReceiptProcessor.checkProductInfo(three, { Name = "x" }))).toBe(false)
+		local available, price, message =
+			GamePassOwnership.checkInfo(three, { Name = "3x", PriceInRobux = 100, IsForSale = true })
+		expect(available).toBe(true)
+		expect(price).toBe(100)
+		expect(string.find(message, "for sale, 100 Robux", 1, true) ~= nil).toBe(true)
+	end)
+
+	it("flags a 3x price that differs from the design", function()
+		local three = Entitlements.product("MultiOpen3")
+		local available, price, message =
+			GamePassOwnership.checkInfo(three, { Name = "3x", PriceInRobux = 80, IsForSale = true })
+		expect(available).toBe(true)
+		expect(price).toBe(80)
+		expect(string.find(message, "design says 100", 1, true) ~= nil).toBe(true)
+	end)
+
+	it("reads the 6x price from Roblox instead of assuming one", function()
+		local six = Entitlements.product("MultiOpen6")
+		local available, price = GamePassOwnership.checkInfo(six, { Name = "6x", PriceInRobux = 249, IsForSale = true })
+		expect(available).toBe(true)
+		expect(price).toBe(249)
+	end)
+
+	it("marks passes that are off sale or unreadable as unavailable", function()
+		local three = Entitlements.product("MultiOpen3")
+		expect((GamePassOwnership.checkInfo(three, { Name = "3x", PriceInRobux = 100, IsForSale = false }))).toBe(false)
+		expect((GamePassOwnership.checkInfo(three, nil))).toBe(false)
 	end)
 end)
 

@@ -91,15 +91,15 @@ function ConfigCheck.run(config: any?): { string }
 		end
 	end
 
-	-- Multi Opening products: valid ids, unique pack counts, prerequisites that exist.
+	-- Multi Opening game passes: valid ids, unique pack counts, prerequisites that exist.
 	if Config.Monetization and Config.Monetization.MultiOpen then
 		local seenPacks: { [number]: boolean } = {}
 		for key, product in Config.Monetization.MultiOpen :: { [string]: any } do
 			if product.Key ~= key then
 				problem(`MultiOpen {key}: Key must match its table key`)
 			end
-			if type(product.ProductId) ~= "number" or product.ProductId < 0 or product.ProductId % 1 ~= 0 then
-				problem(`MultiOpen {key}: ProductId must be a non-negative integer`)
+			if type(product.GamePassId) ~= "number" or product.GamePassId < 0 or product.GamePassId % 1 ~= 0 then
+				problem(`MultiOpen {key}: GamePassId must be a non-negative integer`)
 			end
 			if type(product.Packs) ~= "number" or product.Packs < 2 or seenPacks[product.Packs] then
 				problem(`MultiOpen {key}: Packs must be >= 2 and unique`)

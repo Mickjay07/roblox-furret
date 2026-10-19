@@ -16,8 +16,8 @@ local Remotes = {
 		-- Multi Opening unlocks) -> { packs, cardsPerPack, cards = { RevealCard },
 		-- levelsGained, treatsGained }. Repeating a requestId returns the same result.
 		OpenPack = "OpenPack",
-		-- (productKey) asks the server to prompt a Multi Opening Developer Product; the server
-		-- checks the prerequisite first. Ownership is only granted by ProcessReceipt.
+		-- (passKey) asks the server to prompt a Multi Opening game pass; the server checks the
+		-- prerequisite first. Ownership is only ever set from UserOwnsGamePassAsync.
 		PromptMultiOpen = "PromptMultiOpen",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",

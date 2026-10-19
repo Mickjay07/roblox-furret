@@ -1,19 +1,18 @@
 --!strict
--- Multi Opening Developer Products (3x, then 6x): prompts, receipts and ownership.
+-- Multi Opening GAME PASSES (3x, then 6x): ownership, prompts and purchase completion.
 --
--- This service is the ONLY place that sets MarketplaceService.ProcessReceipt (there was no
--- handler before it). Roblox allows one handler per server and the callback can't be read
--- back, so any future product must be added to handleReceipt below - never by assigning
--- ProcessReceipt again elsewhere, which would silently replace this one.
---
--- Ownership is granted ONLY from ProcessReceipt (never from a client purchase event):
--- the receipt is recorded in Purchases.Receipts together with the entitlement, the profile
--- is saved, and only then is PurchaseGranted returned. Duplicates replay PurchaseGranted
--- without granting twice; a failed save is reverted and retried later (NotProcessedYet).
---
--- At startup each product is checked with GetProductInfo(Enum.InfoType.Product): it must be
--- a Developer Product of this experience. The Robux price comes from the Roblox website and
--- is logged (and published as attributes on ReplicatedStorage.ProductInfo for the shop UI).
+-- These are game passes, so there is no ProcessReceipt (that callback is for Developer
+-- Products only; none are sold yet). Roblox is the source of truth for ownership:
+--   * On join (profile loaded): UserOwnsGamePassAsync for each pass, with retries
+--     (Lib/GamePassOwnership). Confirmed answers are mirrored into Purchases.Entitlements;
+--     a failed query changes nothing and is retried later in the background, so an outage
+--     never removes a pass the player owns.
+--   * Purchase: PromptMultiOpen checks the 6x -> 3x prerequisite on the server, then
+--     PromptGamePassPurchase. When the server-side PromptGamePassPurchaseFinished reports a
+--     purchase, ownership is re-checked with UserOwnsGamePassAsync and only a confirmed
+--     answer is recorded - never the event alone, never a client event.
+--   * At server start each pass is read with GetProductInfo(Enum.InfoType.GamePass): sale
+--     state and Robux price are logged and published on ReplicatedStorage.ProductInfo.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -21,94 +20,131 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
+local Types = require(Shared.Types)
 local Entitlements = require(Shared.Logic.Entitlements)
 local Validate = require(Shared.Util.Validate)
 
 local Net = require(script.Parent.Parent.Lib.Net)
-local ReceiptProcessor = require(script.Parent.Parent.Lib.ReceiptProcessor)
+local GamePassOwnership = require(script.Parent.Parent.Lib.GamePassOwnership)
 local DataService = require(script.Parent.DataService)
 
 local MonetizationService = {}
 
--- Product key -> true once GetProductInfo confirmed it is a Developer Product.
-local verified: { [string]: boolean } = {}
--- PurchaseIds being processed right now (ProcessReceipt can run concurrently).
-local inFlight: { [string]: boolean } = {}
+-- Background re-checks after a failed ownership query (seconds after join).
+local RETRY_DELAYS = { 20, 60, 180, 600 }
+
 local productInfoFolder: Folder
+-- Pass key -> true once GetProductInfo confirmed it is a game pass that is for sale.
+local forSale: { [string]: boolean } = {}
 
-local function handleReceipt(receiptInfo: any): Enum.ProductPurchaseDecision
-	local receipt: ReceiptProcessor.Receipt = {
-		PurchaseId = tostring(receiptInfo.PurchaseId),
-		ProductId = tonumber(receiptInfo.ProductId) or 0,
-		PlayerId = tonumber(receiptInfo.PlayerId) or 0,
-	}
-	if not Entitlements.productById(receipt.ProductId) then
-		-- Not a product this game knows (yet): keep it for a later server version.
-		warn(`[Monetization] Unknown product {receipt.ProductId} in receipt {receipt.PurchaseId}`)
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
-	local player = Players:GetPlayerByUserId(receipt.PlayerId)
-	local data = if player then DataService:GetData(player) else nil
-	if not player or not data then
-		-- Player left or profile not loaded: Roblox retries when they are back.
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
-	if inFlight[receipt.PurchaseId] then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
-	inFlight[receipt.PurchaseId] = true
-
-	local outcome = ReceiptProcessor.process(data, receipt, os.time())
-	local decision = Enum.ProductPurchaseDecision.NotProcessedYet
-	if outcome.Decision == "Duplicate" then
-		decision = Enum.ProductPurchaseDecision.PurchaseGranted
-	elseif outcome.Decision == "Granted" then
-		if DataService:SaveNow(player) then
-			decision = Enum.ProductPurchaseDecision.PurchaseGranted
-			DataService:Changed(player, "Purchases")
-			local product = outcome.Product
-			if product then
-				DataService:Notify(
-					player,
-					if outcome.MissingPrerequisite
-						then `{product.DisplayName} unlocked - it activates once you own the previous unlock`
-						else `{product.DisplayName} unlocked! Open {product.Packs} packs at once.`,
-					"success"
-				)
-			end
-		else
-			ReceiptProcessor.revert(data, receipt, outcome)
-			warn(`[Monetization] Save failed for receipt {receipt.PurchaseId}; Roblox will retry it`)
-		end
-	end
-	inFlight[receipt.PurchaseId] = nil
-	return decision
+local function query(userId: number, gamePassId: number): (boolean, any)
+	return pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(userId, gamePassId)
+	end)
 end
 
-local function verifyProducts()
+local function pause(attempt: number)
+	task.wait(attempt * 1.5)
+end
+
+-- A 6x pass without 3x is kept (it is the player's real ownership) but explained.
+local function explainPrerequisites(player: Player, data: Types.PlayerData)
+	for _, product in Entitlements.products() do
+		if
+			product.Requires
+			and Entitlements.owns(data, product.Key)
+			and not Entitlements.owns(data, product.Requires)
+		then
+			local kind, message = GamePassOwnership.purchaseMessage(data, product, "owned")
+			DataService:Notify(player, message, kind)
+		end
+	end
+end
+
+-- Asks Roblox about every pass for this player. Returns true when all queries answered.
+local function refresh(player: Player): boolean
+	local data = DataService:GetData(player)
+	if not data then
+		return false
+	end
+	local _, changed, verified = GamePassOwnership.refreshAll(data, player.UserId, query, 3, pause)
+	if player.Parent == nil or DataService:GetData(player) ~= data then
+		return verified
+	end
+	if changed then
+		DataService:Changed(player, "Purchases")
+	end
+	player:SetAttribute("GamePassesVerified", verified)
+	return verified
+end
+
+local function onProfileLoaded(player: Player)
+	player:SetAttribute("GamePassesVerified", false)
+	task.spawn(function()
+		if refresh(player) then
+			local data = DataService:GetData(player)
+			if data then
+				explainPrerequisites(player, data)
+			end
+			return
+		end
+		warn(`[Monetization] Game pass ownership check failed for {player.Name}; retrying in the background`)
+		for _, delay in RETRY_DELAYS do
+			task.wait(delay)
+			if player.Parent == nil then
+				return
+			end
+			if refresh(player) then
+				return
+			end
+		end
+	end)
+end
+
+local function onPurchaseFinished(player: Player, gamePassId: number, wasPurchased: boolean)
+	local product = Entitlements.productByPassId(gamePassId)
+	if not product or not wasPurchased then
+		return
+	end
+	local data = DataService:GetData(player)
+	if not data then
+		return
+	end
+	-- Confirm with Roblox before recording anything.
+	local result = GamePassOwnership.check(query, player.UserId, gamePassId, 4, pause)
+	if DataService:GetData(player) ~= data then
+		return
+	end
+	if GamePassOwnership.apply(data, product.Key, result) then
+		DataService:Changed(player, "Purchases")
+	end
+	local kind, message = GamePassOwnership.purchaseMessage(data, product, result)
+	DataService:Notify(player, message, kind)
+	if result ~= "owned" then
+		-- Ownership not confirmed yet (API lag or outage): re-check shortly.
+		task.delay(15, function()
+			if player.Parent ~= nil then
+				refresh(player)
+			end
+		end)
+	end
+end
+
+local function readPassInfo()
 	for _, product in Entitlements.products() do
 		task.spawn(function()
 			local ok, info = pcall(function()
-				return MarketplaceService:GetProductInfo(product.ProductId, Enum.InfoType.Product)
+				return MarketplaceService:GetProductInfo(product.GamePassId, Enum.InfoType.GamePass)
 			end)
-			local valid, message = ReceiptProcessor.checkProductInfo(product, if ok then info else nil)
-			if valid then
-				verified[product.Key] = true
-				productInfoFolder:SetAttribute(`{product.Key}_Price`, (info :: any).PriceInRobux)
+			local available, price, message = GamePassOwnership.checkInfo(product, if ok then info else nil)
+			forSale[product.Key] = available
+			productInfoFolder:SetAttribute(`{product.Key}_Price`, price)
+			productInfoFolder:SetAttribute(`{product.Key}_Available`, available)
+			if available and not string.find(message, "design says", 1, true) then
 				print(`[Monetization] {message}`)
 			else
-				-- Report what it actually is, so a game pass is never treated as a product.
-				local passOk = pcall(function()
-					return MarketplaceService:GetProductInfo(product.ProductId, Enum.InfoType.GamePass)
-				end)
-				warn(
-					`[Monetization] {message}`
-						.. if passOk
-							then ". It looks like a GAME PASS id: game passes need a different purchase flow, so it is disabled."
-							else ". It is disabled until this is fixed (in Studio, the place must be published)."
-				)
+				warn(`[Monetization] {message}{if ok then "" else ` ({info})`}`)
 			end
-			productInfoFolder:SetAttribute(`{product.Key}_Available`, valid)
 		end)
 	end
 end
@@ -120,8 +156,17 @@ function MonetizationService:Init()
 end
 
 function MonetizationService:Start()
-	MarketplaceService.ProcessReceipt = handleReceipt
-	verifyProducts()
+	readPassInfo()
+
+	DataService.ProfileLoaded:Connect(onProfileLoaded)
+	-- Profiles that loaded before this Start ran (services start concurrently).
+	for _, player in Players:GetPlayers() do
+		if DataService:GetData(player) and player:GetAttribute("GamePassesVerified") == nil then
+			onProfileLoaded(player)
+		end
+	end
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPurchaseFinished)
 
 	local keys: { [string]: boolean } = {}
 	for _, product in Entitlements.products() do
@@ -132,18 +177,16 @@ function MonetizationService:Start()
 		if not data then
 			return { ok = false, error = "Data not loaded" }
 		end
+		-- Server-side prerequisite: 6x can only be prompted once 3x is owned.
 		local ok, reason = Entitlements.canPurchase(data, key)
 		if not ok then
 			return { ok = false, error = reason }
 		end
-		if not verified[key] then
-			return { ok = false, error = "This purchase isn't available right now" }
-		end
 		local product = Entitlements.product(key)
-		if not product then
-			return { ok = false, error = "That item isn't available" }
+		if not product or not forSale[key] then
+			return { ok = false, error = "This pass isn't available right now" }
 		end
-		MarketplaceService:PromptProductPurchase(player, product.ProductId)
+		MarketplaceService:PromptGamePassPurchase(player, product.GamePassId)
 		return { ok = true }
 	end)
 end

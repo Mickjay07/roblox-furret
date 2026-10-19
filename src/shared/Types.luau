@@ -121,8 +121,10 @@ export type PlayerData = {
 	Progression: { Level: number, Xp: number },
 	Stats: { [string]: number },
 	Flags: { [string]: boolean },
-	-- Receipts: processed Developer Product PurchaseId -> Unix time (idempotency).
-	-- Entitlements: one-time unlocks bought with Developer Products (e.g. MultiOpen3).
+	-- Receipts: processed Developer Product PurchaseId -> Unix time (reserved; no Developer
+	-- Products are sold yet).
+	-- Entitlements: last confirmed game pass ownership (e.g. MultiOpen3), mirrored from
+	-- UserOwnsGamePassAsync; a failed query never clears it.
 	Purchases: { Receipts: { [string]: number }, Entitlements: { [string]: boolean } },
 }
 

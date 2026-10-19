@@ -284,22 +284,30 @@ Use `packs pack1 10` in the DEV panel, then the Pack Shop.
 - [ ] Stop the test mid-reveal and rejoin: all five cards are in the backpack.
 - [ ] Full backpack: OPEN shows an error toast and no pack is consumed.
 
-### 1.14 Multi Opening Developer Products (3x / 6x)
-The place must be **published** (Developer Products belong to the experience). In Studio,
-purchases are test purchases (no Robux charged) and still run `ProcessReceipt`.
-- [ ] Server Output at start: `[Monetization] 3x Multi Opening (2038324873) "...":
-      Developer Product, N Robux` and the same for 6x. **Check N = 100 for 3x.** A warning
-      that it "looks like a GAME PASS id" or "is not a Developer Product" means the id is
-      wrong or of the wrong type: the option then shows `UNAVAILABLE`.
-- [ ] Click `UNLOCK 3x`: the Roblox purchase prompt appears. Buy (test purchase):
-      toast `3x Multi Opening unlocked!`, the strip shows `3 PACKS`, `6x` becomes
+### 1.14 Multi Opening game passes (3x / 6x)
+The place must be **published** (the passes belong to the experience). In Studio, game pass
+purchases are test purchases (no Robux charged). Note that in Studio
+`UserOwnsGamePassAsync` reflects your real account: if you already own a pass, it shows as
+owned.
+- [ ] Server Output at start: `[Monetization] 3x Multi Opening (game pass 2038324873)
+      "...": for sale, 100 Robux` and the same line for 6x with **its configured price**.
+      A warning `NOT for sale`, `could not be read` or `design says 100` must be fixed on
+      the Roblox website; an off-sale pass shows `UNAVAILABLE`.
+- [ ] While the server is still asking Roblox, the buttons read `3x - CHECKING...`, never
+      `UNLOCK` for a pass you own.
+- [ ] Click `UNLOCK 3x  R$100`: the Roblox game pass prompt appears. Buy (test purchase):
+      toast `3x Multi Opening activated!`, the strip shows `3 PACKS`, `6x` becomes
       `UNLOCK 6x  R$<price>`.
-- [ ] Rejoin: 3x is still unlocked (saved in `Purchases.Entitlements`).
-- [ ] Cancel a purchase prompt: nothing is unlocked.
-- [ ] Before owning 3x, the 6x button can't prompt; from the client command bar,
+- [ ] Rejoin: 3x is owned again without buying (checked with Roblox on join).
+- [ ] Cancel a purchase prompt: nothing changes.
+- [ ] Before owning 3x, the 6x button reads `6x - NEEDS 3x` and can't prompt; from the
+      client command bar,
       `game.ReplicatedStorage.Remotes.PromptMultiOpen:InvokeServer("MultiOpen6")` returns
       `Unlock 3x Multi Opening first`.
-- [ ] Opening 3x without the unlock is refused by the server:
+- [ ] 6x bought without 3x (e.g. from the experience page on the website), then join: the
+      toast says the 6x pass is owned and activates once you also own 3x; 6x stays locked;
+      after buying 3x, 6x works without buying it again.
+- [ ] Opening 3x without the pass is refused by the server:
       `...Remotes.OpenPack:InvokeServer("pack1", "probe-1", 3)` returns an error, no packs
       consumed.
 
@@ -356,7 +364,7 @@ purchases are test purchases (no Robux charged) and still run `ProcessReceipt`.
 - [ ] A failed trade leaves both inventories unchanged.
 
 ### 2.9 Monetization (§23, roadmap Phase E; needs real product ids in a test experience)
-- [ ] A developer product purchase grants exactly once, even when Roblox retries
-      `ProcessReceipt` (simulate by yielding or erroring once).
+- [ ] (When Developer Products are added) a purchase grants exactly once, even when Roblox
+      retries `ProcessReceipt` (simulate by yielding or erroring once).
 - [ ] Game Pass benefits apply on join and after an in-game purchase.
 - [ ] A client "purchase succeeded" message alone grants nothing.

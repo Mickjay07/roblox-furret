@@ -40,8 +40,9 @@ ServerScriptService.Server        (src/server)
     SettingsService               UpdateSetting
     PackService                   BuyPack (to pack inventory), OpenPack (1/3/6 packs, server-side
                                   Random, idempotent per request id via Lib/PackOpenRequests)
-    MonetizationService           Multi Opening Developer Products: the ONLY ProcessReceipt
-                                  handler (Lib/ReceiptProcessor), PromptMultiOpen, product check
+    MonetizationService           Multi Opening game passes: UserOwnsGamePassAsync on join and
+                                  after PromptGamePassPurchaseFinished (Lib/GamePassOwnership),
+                                  PromptMultiOpen (6x needs 3x), GetProductInfo(GamePass)
     CardService                   PlaceCard, RemoveCard, PlaceBest, SellCards, SetFavorite
     UpgradeService                BuyUpgrade
     EconomyService                stand earnings tick, CollectEarnings, offline earnings
@@ -121,7 +122,8 @@ clean result, and the server logs any problem at startup.
 | `Progression` | `{ Level, Xp }` |
 | `Stats` | Packs opened, cards obtained or sold, cash earned or spent, play time, joins |
 | `Flags.StarterGranted` | Starter-reward guard |
-| `Purchases.Receipts` | Reserved for de-duplicating developer product receipts |
+| `Purchases.Receipts` | Reserved for de-duplicating developer product receipts (none sold yet) |
+| `Purchases.Entitlements` | Last confirmed game pass ownership (MultiOpen3/6), mirrored from Roblox; a failed query never clears it |
 
 Maps use string keys so they save as dictionaries.
 

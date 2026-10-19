@@ -2,6 +2,7 @@
 -- Pack shop window. OPEN opens one pack and plays the A7 opening sequence (UI/PackReveal).
 
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -56,8 +57,8 @@ local function openPack(pack: Types.PackDef, packs: number)
 	end)
 end
 
--- Robux price published by the server after it verified the Developer Product (nil until
--- then, or when the product could not be verified).
+-- Robux price published by the server after reading the game pass info (nil until then,
+-- or when the pass is not for sale / could not be read).
 local function productState(key: string): (boolean, number?)
 	local folder = ReplicatedStorage:FindFirstChild("ProductInfo")
 	if not folder then
@@ -168,7 +169,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		end,
 	})
 
-	-- Opening mode strip: 1 pack always; 3x / 6x once unlocked (Developer Products).
+	-- Opening mode strip: 1 pack always; 3x / 6x with the Multi Opening game passes.
 	Components.label({
 		Text = "OPEN:",
 		Size = UDim2.fromOffset(70, 30),
@@ -202,8 +203,8 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 				end
 				local product = option.product
 				if product and Entitlements.canPurchase(data, product.Key) then
-					-- The server re-checks the prerequisite and prompts the Developer Product.
-					-- Ownership arrives only through the server's ProcessReceipt.
+					-- The server re-checks the prerequisite and prompts the game pass. Ownership
+					-- is recorded only after the server confirms it with Roblox.
 					Request(Remotes.Functions.PromptMultiOpen, product.Key)
 				end
 			end,
@@ -309,11 +310,15 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 				local product = entry.product :: Entitlements.Product
 				local available, price = productState(product.Key)
 				local canBuy, _ = Entitlements.canPurchase(data, product.Key)
+				local verified = Players.LocalPlayer:GetAttribute("GamePassesVerified") == true
 				if product.Requires and not Entitlements.owns(data, product.Requires) then
 					local required = Entitlements.product(product.Requires)
 					label, style = `{entry.packs}x - NEEDS {if required then `{required.Packs}x` else "UNLOCK"}`, "Gray"
 				elseif Entitlements.owns(data, product.Key) then
 					label, style = `{entry.packs}x - LOCKED`, "Gray"
+				elseif not verified then
+					-- Ownership not confirmed by Roblox yet: never show "unlock" as if not owned.
+					label, style = `{entry.packs}x - CHECKING...`, "Gray"
 				elseif canBuy and available then
 					label, style =
 						if price then `UNLOCK {entry.packs}x  R${price}` else `UNLOCK {entry.packs}x`, "Purple"
@@ -339,6 +344,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	end
 	task.spawn(function()
 		-- Prices and availability appear once the server has verified the products.
+		Players.LocalPlayer:GetAttributeChangedSignal("GamePassesVerified"):Connect(refreshModes)
 		local folder = ReplicatedStorage:WaitForChild("ProductInfo", 30)
 		if folder then
 			folder.AttributeChanged:Connect(refreshModes)
