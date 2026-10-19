@@ -22,6 +22,7 @@ local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local Request = require(script.Parent.Parent.Lib.Request)
 local DataController = require(script.Parent.DataController)
+local NotificationController = require(script.Parent.NotificationController)
 
 local PacksController = {}
 
@@ -146,14 +147,14 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 
 	Components.label({
 		Text = string.upper(pack.DisplayName),
-		Size = UDim2.new(0, 330, 0, 34),
+		Size = UDim2.new(0, 300, 0, 34),
 		Position = UDim2.fromOffset(110, 10),
 		XAlign = Enum.TextXAlignment.Left,
 		Parent = row,
 	})
 	local info = Components.label({
 		Text = "",
-		Size = UDim2.new(0, 330, 0, 22),
+		Size = UDim2.new(0, 300, 0, 22),
 		Position = UDim2.fromOffset(110, 48),
 		XAlign = Enum.TextXAlignment.Left,
 		Color = Theme.Colors.Muted,
@@ -162,7 +163,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	})
 	local chase = Components.label({
 		Text = "",
-		Size = UDim2.new(0, 330, 0, 22),
+		Size = UDim2.new(0, 300, 0, 22),
 		Position = UDim2.fromOffset(110, 76),
 		XAlign = Enum.TextXAlignment.Left,
 		Color = Theme.Colors.Treats,
@@ -173,14 +174,16 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amountLabel = Components.label({
 		Text = "x1",
 		Size = UDim2.fromOffset(60, 34),
-		Position = UDim2.new(1, -262, 0, 82),
+		Position = UDim2.new(1, -282, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 	})
 	local buy: TextButton
+	local onAmountChanged: () -> () = function() end
 	local function refreshPrice()
 		amountLabel.Text = `x{amount}`
-		Components.setButtonText(buy, "$" .. Format.short(pack.Price * amount, 1e6))
+		Components.setButtonText(buy, "BUY $" .. Format.short(pack.Price * amount, 1e6))
+		onAmountChanged()
 	end
 	buy = Components.button({
 		Text = "",
@@ -192,6 +195,28 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		OnClick = function()
 			local result = Request(Remotes.Functions.BuyPack, pack.Id, amount)
 			if result.ok then
+				NotificationController:Push(
+					`Bought {amount}x {pack.DisplayName} - you have {result.owned}. Open them any time!`,
+					"success"
+				)
+			end
+		end,
+	})
+	local open = Components.button({
+		Text = "NO PACKS",
+		Style = "Gray",
+		Size = UDim2.fromOffset(190, 40),
+		Position = UDim2.new(1, -14, 0, 76),
+		AnchorPoint = Vector2.new(1, 0),
+		Parent = row,
+		OnClick = function()
+			local data = DataController:Get()
+			local owned = if data then data.Packs[pack.Id] or 0 else 0
+			if owned < 1 then
+				return
+			end
+			local result = Request(Remotes.Functions.OpenPack, pack.Id, math.min(owned, amount))
+			if result.ok then
 				showReveal(result.cards)
 			end
 		end,
@@ -200,7 +225,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		Text = "-",
 		Style = "Blue",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -306, 0, 82),
+		Position = UDim2.new(1, -326, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
@@ -212,7 +237,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		Text = "+",
 		Style = "Blue",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -218, 0, 82),
+		Position = UDim2.new(1, -238, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
@@ -272,10 +297,24 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 			else ""
 
 		local missing = Progression.describeMissing(data, pack.Unlock)
-		lock.Visible = missing ~= nil
+		local owned = data.Packs[pack.Id] or 0
+		-- Owned packs stay openable even if the pack can no longer be bought.
+		lock.Visible = missing ~= nil and owned == 0
+		Components.setButtonText(open, if owned > 0 then `OPEN ({owned})` else "NO PACKS")
+		Components.setButtonStyle(open, if owned > 0 then "Orange" else "Gray")
+		local affordable = (data.Currency[pack.Currency] or 0) >= pack.Price * amount
+		Components.setButtonStyle(buy, if affordable and missing == nil then "Green" else "Gray")
 		lockText.Text = if missing then string.upper(missing) else ""
 	end
 	DataController:Observe("Progression", refresh)
+	DataController:Observe("Packs", refresh)
+	onAmountChanged = function()
+		local data = DataController:Get()
+		if data then
+			refresh(data)
+		end
+	end
+	DataController:Observe("Currency", refresh)
 	DataController:Observe("Discovered", refresh)
 	DataController:Observe("Upgrades", refresh)
 end
@@ -283,7 +322,7 @@ end
 function PacksController:Start()
 	buildReveal()
 	Windows.register("Packs", {
-		Title = "Buy Packs",
+		Title = "Packs",
 		Accent = "Green",
 		Size = Vector2.new(820, 540),
 		Build = function(content: Frame)

@@ -15,12 +15,17 @@ local Market = Loader.require("src/shared/Logic/Market")
 local PackShop = Loader.require("src/shared/Logic/PackShop")
 local UpgradeShop = Loader.require("src/shared/Logic/UpgradeShop")
 local Format = Loader.require("src/shared/Util/Format")
+local IncomeLedger = Loader.require("src/shared/Logic/IncomeLedger")
 
 local hours = tonumber(process.args[1]) or 2
 math.randomseed(1)
 
 local data = ProfileSchema.defaults()
-Account.grantStarter(data, 1, 0)
+Account.grantStarter(data)
+-- Open the starter packs straight away, as a new player would.
+for packId, count in data.Packs do
+	PackShop.open(data, packId, count, { ownerId = 1, now = 0 })
+end
 Display.placeBest(data)
 
 local unlocked = {}
@@ -37,7 +42,11 @@ local function report(t: number, text: string)
 end
 
 for t = 1, hours * 3600 do
-	data.Currency.Cash += Economy.totalIncome(data)
+	-- Stands accumulate; the bot collects everything every 10 seconds.
+	IncomeLedger.accrue(data, 1)
+	if t % 10 == 0 then
+		IncomeLedger.collectAll(data)
+	end
 	local income = math.max(Economy.totalIncome(data), 1)
 
 	-- Upgrades that pay back within 60 seconds of income.
@@ -77,7 +86,7 @@ for t = 1, hours * 3600 do
 						Market.sell(data, ids)
 					end
 				end
-				if PackShop.buy(data, pack.Id, 1, { ownerId = 1, now = t }) then
+				if PackShop.buy(data, pack.Id, 1) and PackShop.open(data, pack.Id, 1, { ownerId = 1, now = t }) then
 					Display.placeBest(data)
 				end
 			end

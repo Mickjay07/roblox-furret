@@ -59,15 +59,16 @@ describe("Inventory", function()
 end)
 
 describe("Account", function()
-	it("grants the starter bundle exactly once", function()
+	it("grants starter cash and starter packs exactly once (spec §3.3)", function()
 		local data = ProfileSchema.defaults()
-		expect(Account.grantStarter(data, 9, 0)).toBe(true)
-		expect(Account.grantStarter(data, 9, 0)).toBe(false)
+		expect(Account.grantStarter(data)).toBe(true)
+		expect(Account.grantStarter(data)).toBe(false)
 		expect(data.Currency.Cash).toBe(Config.Economy.StartingCurrency.Cash)
-		expect(Inventory.count(data)).toBe(#Config.Economy.StarterCards)
+		for packId, count in Config.Economy.StarterPacks do
+			expect(data.Packs[packId]).toBe(count)
+		end
+		expect(Inventory.count(data)).toBe(0)
 		expect(data.Flags.StarterGranted).toBe(true)
-		local Economy = Loader.require("src/shared/Logic/Economy")
-		expect(Economy.totalIncome(data) > 0).toBe(true)
 	end)
 
 	it("validates settings by key and type", function()

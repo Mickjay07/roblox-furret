@@ -117,14 +117,18 @@ local function onPlayerAdded(player: Player)
 	local data = profile.Data :: Types.PlayerData
 	local now = os.time()
 	Account.recordJoin(data, now)
-	local grantedStarter = Account.grantStarter(data, player.UserId, now)
+	local grantedStarter = Account.grantStarter(data)
 	profiles[player] = profile
 
 	setupLeaderstats(player, data)
 	DataService.ProfileLoaded:Fire(player, data)
 	Net.fire(player, Remotes.Events.DataChanged, "__snapshot", data)
 	if grantedStarter then
-		Net.notify(player, "Welcome to Ferret Card Tycoon! Here are some starter cards.", "success")
+		Net.notify(
+			player,
+			"Welcome to Ferret Card Tycoon! Open your starter packs in PACKS, then put your ferrets on stands.",
+			"success"
+		)
 	end
 	if usingMockStore then
 		Net.notify(player, "Studio test mode: progress is not saved.", "warning")

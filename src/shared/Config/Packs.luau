@@ -1,6 +1,7 @@
 --!strict
--- Card packs. Buying a pack immediately opens it: each of CardsPerOpen cards rolls a rarity
--- from RarityWeights, then a card of that rarity from the pack's collections, then a variant.
+-- Card packs. Buying a pack puts it in the player's pack inventory (owner decision Q1); opening
+-- it rolls CardsPerOpen cards (owner decision Q2: five). Each card rolls a rarity from
+-- RarityWeights, then a card of that rarity from the pack's collections, then a variant.
 local Types = require(script.Parent.Parent.Types)
 
 local list: { Types.PackDef } = {
@@ -11,7 +12,7 @@ local list: { Types.PackDef } = {
 		Order = 1,
 		Price = 750,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Burrow" },
 		RarityWeights = {
 			Common = 600,
@@ -30,7 +31,7 @@ local list: { Types.PackDef } = {
 		Order = 2,
 		Price = 20000,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Snack" },
 		RarityWeights = {
 			Common = 550,
@@ -50,7 +51,7 @@ local list: { Types.PackDef } = {
 		Order = 3,
 		Price = 125000,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Knight" },
 		RarityWeights = {
 			Common = 500,
@@ -70,7 +71,7 @@ local list: { Types.PackDef } = {
 		Order = 4,
 		Price = 1000000,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Shore" },
 		RarityWeights = {
 			Common = 450,
@@ -91,7 +92,7 @@ local list: { Types.PackDef } = {
 		Order = 5,
 		Price = 15000000,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Cosmic" },
 		RarityWeights = {
 			Uncommon = 500,
@@ -112,7 +113,7 @@ local list: { Types.PackDef } = {
 		Order = 6,
 		Price = 200000000,
 		Currency = "Cash",
-		CardsPerOpen = 3,
+		CardsPerOpen = 5,
 		Collections = { "Midnight" },
 		RarityWeights = {
 			Rare = 600,

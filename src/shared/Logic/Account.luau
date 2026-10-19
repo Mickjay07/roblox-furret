@@ -3,14 +3,13 @@
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local ProfileSchema = require(script.Parent.Parent.Data.ProfileSchema)
-local Display = require(script.Parent.Display)
-local Inventory = require(script.Parent.Inventory)
+local PackShop = require(script.Parent.PackShop)
 
 local Account = {}
 
--- Grants starting currency and starter cards (placed on stands) exactly once. The flag is stored in the
+-- Grants starting currency and starter packs exactly once (spec §3.3). The flag is stored in the
 -- player's saved data; combined with the session lock this prevents duplicate grants.
-function Account.grantStarter(data: Types.PlayerData, ownerId: number, now: number): boolean
+function Account.grantStarter(data: Types.PlayerData): boolean
 	if data.Flags.StarterGranted then
 		return false
 	end
@@ -18,12 +17,8 @@ function Account.grantStarter(data: Types.PlayerData, ownerId: number, now: numb
 	for currency, amount in Config.Economy.StartingCurrency do
 		data.Currency[currency] = (data.Currency[currency] or 0) + amount
 	end
-	for _, cardId in Config.Economy.StarterCards do
-		Inventory.add(data, ownerId, cardId, Config.Variants.Default, now, true)
-	end
-	-- Put the starter cards on stands so income starts immediately.
-	if next(data.Display) == nil then
-		Display.placeBest(data)
+	for packId, count in Config.Economy.StarterPacks do
+		PackShop.grant(data, packId, count)
 	end
 	return true
 end

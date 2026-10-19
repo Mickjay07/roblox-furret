@@ -13,9 +13,12 @@ local Economy = Loader.require("src/shared/Logic/Economy")
 local Inventory = Loader.require("src/shared/Logic/Inventory")
 local Progression = Loader.require("src/shared/Logic/Progression")
 
+-- A fresh player after the starter grant, plus two cheap cards for stand tests.
 local function newPlayer(cash: number?)
 	local data = ProfileSchema.defaults()
-	Account.grantStarter(data, 7, 0)
+	Account.grantStarter(data)
+	Inventory.add(data, 7, "burrow_sable_scout", "Normal", 0)
+	Inventory.add(data, 7, "burrow_sock_bandit", "Normal", 0)
 	if cash then
 		data.Currency.Cash = cash
 	end
@@ -23,64 +26,106 @@ local function newPlayer(cash: number?)
 end
 
 local ctx = { ownerId = 7, now = 50 }
+local CardRegistry = Loader.require("src/shared/Logic/CardRegistry")
 
 describe("PackShop.buy", function()
-	it("charges the price, adds cards and reports discoveries", function()
+	it("charges the price and puts packs in the pack inventory without opening them", function()
 		local pack = Config.Packs.ById.burrow_pack
-		local startCash = pack.Price * 2 + 123
-		local data = newPlayer(startCash)
-		local ok, purchase = PackShop.buy(data, "burrow_pack", 2, ctx)
+		local data = newPlayer(pack.Price * 2 + 123)
+		local ownedBefore = PackShop.owned(data, "burrow_pack")
+		local cardsBefore = Inventory.count(data)
+		local ok, cost = PackShop.buy(data, "burrow_pack", 2)
 		expect(ok).toBe(true)
+		expect(cost).toBe(pack.Price * 2)
 		expect(data.Currency.Cash).toBe(123)
-		expect(#purchase.Cards).toBe(pack.CardsPerOpen * 2)
-		expect(Inventory.count(data)).toBe(#Config.Economy.StarterCards + pack.CardsPerOpen * 2)
-		for _, card in purchase.Cards do
-			expect(data.Cards[card.InstanceId].CardId).toBe(card.CardId)
-			expect(card.OneIn >= 1).toBe(true)
-		end
-		expect(data.Stats.PacksOpened).toBe(2)
-		expect(purchase.XpGained).toBe(pack.Xp * 2)
+		expect(PackShop.owned(data, "burrow_pack")).toBe(ownedBefore + 2)
+		expect(Inventory.count(data)).toBe(cardsBefore)
+		expect(data.Stats.PacksOpened).toBe(0)
 	end)
 
 	it("rejects unknown packs, bad amounts, locked packs and low cash without changes", function()
 		local data = newPlayer(10)
 		local before = ProfileSchema.deepCopy(data)
-		expect((PackShop.buy(data, "fake_pack", 1, ctx))).toBe(false)
-		expect((PackShop.buy(data, "burrow_pack", 0, ctx))).toBe(false)
-		expect((PackShop.buy(data, "burrow_pack", 1.5, ctx))).toBe(false)
-		expect((PackShop.buy(data, "burrow_pack", Config.Game.Limits.MaxPacksPerPurchase + 1, ctx))).toBe(false)
-		local ok, reason = PackShop.buy(data, "burrow_pack", 1, ctx)
+		expect((PackShop.buy(data, "fake_pack", 1))).toBe(false)
+		expect((PackShop.buy(data, "burrow_pack", 0))).toBe(false)
+		expect((PackShop.buy(data, "burrow_pack", 1.5))).toBe(false)
+		expect((PackShop.buy(data, "burrow_pack", Config.Game.Limits.MaxPacksPerPurchase + 1))).toBe(false)
+		local ok, reason = PackShop.buy(data, "burrow_pack", 1)
 		expect(ok).toBe(false)
 		expect(reason).toBe("Not enough Cash")
 		data.Currency.Cash = 1e12
-		local ok2, reason2 = PackShop.buy(data, "midnight_pack", 1, ctx)
+		local ok2, reason2 = PackShop.buy(data, "midnight_pack", 1)
 		expect(ok2).toBe(false)
 		expect(string.find(reason2, "level", 1, true) ~= nil).toBe(true)
 		data.Currency.Cash = 10
 		expect(data).toEqual(before)
 	end)
+end)
 
-	it("refuses purchases that would overflow the backpack", function()
-		local data = newPlayer(1e9)
+describe("PackShop.open", function()
+	it("opens owned packs into CardsPerOpen cards each and spends the packs", function()
+		local pack = Config.Packs.ById.burrow_pack
+		local data = newPlayer()
+		PackShop.grant(data, "burrow_pack", 2)
+		local owned = PackShop.owned(data, "burrow_pack")
+		local cardsBefore = Inventory.count(data)
+		local ok, opening = PackShop.open(data, "burrow_pack", 2, ctx)
+		expect(ok).toBe(true)
+		expect(pack.CardsPerOpen).toBe(5)
+		expect(#opening.Cards).toBe(pack.CardsPerOpen * 2)
+		expect(Inventory.count(data)).toBe(cardsBefore + pack.CardsPerOpen * 2)
+		expect(PackShop.owned(data, "burrow_pack")).toBe(owned - 2)
+		for _, card in opening.Cards do
+			expect(data.Cards[card.InstanceId].CardId).toBe(card.CardId)
+			expect(card.OneIn >= 1).toBe(true)
+		end
+		expect(data.Stats.PacksOpened).toBe(2)
+		expect(opening.XpGained).toBe(pack.Xp * 2)
+	end)
+
+	it("removes the inventory entry when the last pack is opened", function()
+		local data = ProfileSchema.defaults()
+		PackShop.grant(data, "snack_pack", 1)
+		expect((PackShop.open(data, "snack_pack", 1, ctx))).toBe(true)
+		expect(data.Packs.snack_pack).toBeNil()
+	end)
+
+	it("rejects packs the player does not own, bad amounts and unknown packs without changes", function()
+		local data = newPlayer()
+		local before = ProfileSchema.deepCopy(data)
+		local owned = PackShop.owned(data, "burrow_pack")
+		local ok, reason = PackShop.open(data, "burrow_pack", owned + 1, ctx)
+		expect(ok).toBe(false)
+		expect(reason).toBe("You don't have that many packs")
+		expect((PackShop.open(data, "snack_pack", 1, ctx))).toBe(false)
+		expect((PackShop.open(data, "burrow_pack", 0, ctx))).toBe(false)
+		expect((PackShop.open(data, "nope", 1, ctx))).toBe(false)
+		expect(data).toEqual(before)
+	end)
+
+	it("refuses to open when the cards would overflow the backpack, keeping the pack", function()
+		local data = newPlayer()
 		local free = Inventory.freeSpace(data)
 		for i = 1, free - 2 do
 			data.Cards["x-" .. i] =
 				{ CardId = "burrow_sable_scout", Variant = "Normal", Obtained = 0, Favorite = false }
 		end
-		local ok, reason = PackShop.buy(data, "burrow_pack", 1, ctx)
+		local owned = PackShop.owned(data, "burrow_pack")
+		local ok, reason = PackShop.open(data, "burrow_pack", 1, ctx)
 		expect(ok).toBe(false)
 		expect(string.find(reason, "backpack", 1, true) ~= nil).toBe(true)
-		expect(data.Currency.Cash).toBe(1e9)
+		expect(PackShop.owned(data, "burrow_pack")).toBe(owned)
 	end)
 
 	it("levels up and grants treats", function()
-		local data = newPlayer(1e12)
+		local data = newPlayer()
+		PackShop.grant(data, "burrow_pack", 20)
 		local levels = 0
 		for _ = 1, 20 do
-			local ok, purchase = PackShop.buy(data, "burrow_pack", 1, ctx)
+			local ok, opening = PackShop.open(data, "burrow_pack", 1, ctx)
 			expect(ok).toBe(true)
-			levels += purchase.LevelsGained
-			for _, id in purchase.NewInstanceIds do
+			levels += opening.LevelsGained
+			for _, id in opening.NewInstanceIds do
 				data.Cards[id] = nil
 			end
 			if levels > 0 then
@@ -93,27 +138,37 @@ describe("PackShop.buy", function()
 	end)
 
 	it("never drops cards the player has not unlocked", function()
-		local data = newPlayer(1e12)
+		local data = newPlayer()
 		data.Progression.Level = Config.Packs.ById.midnight_pack.Unlock.Level
+		PackShop.grant(data, "midnight_pack", 30)
 		math.randomseed(11)
 		for _ = 1, 30 do
-			local ok, purchase = PackShop.buy(data, "midnight_pack", 1, ctx)
+			local ok, opening = PackShop.open(data, "midnight_pack", 1, ctx)
 			expect(ok).toBe(true)
-			for _, card in purchase.Cards do
-				local def = Loader.require("src/shared/Logic/CardRegistry").get(card.CardId)
-				expect(Progression.meets(data, def.Unlock)).toBe(true)
+			for _, card in opening.Cards do
+				expect(Progression.meets(data, CardRegistry.get(card.CardId).Unlock)).toBe(true)
 			end
-			for _, id in purchase.NewInstanceIds do
+			for _, id in opening.NewInstanceIds do
 				data.Cards[id] = nil -- keep space free
 			end
 		end
+	end)
+
+	it("grant rejects unknown packs and invalid amounts", function()
+		local data = ProfileSchema.defaults()
+		expect(function()
+			PackShop.grant(data, "nope", 1)
+		end).toThrow()
+		expect(function()
+			PackShop.grant(data, "burrow_pack", 0)
+		end).toThrow()
 	end)
 end)
 
 describe("Display", function()
 	it("places into the first empty slot and moves cards between slots", function()
 		local data = newPlayer()
-		table.clear(data.Display) -- starter cards begin on stands
+		table.clear(data.Display)
 		local ids = {}
 		for id in data.Cards do
 			table.insert(ids, id)

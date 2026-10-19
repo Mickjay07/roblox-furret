@@ -57,11 +57,11 @@ describe("Config", function()
 			return out
 		end
 		local broken = copy(Config)
-		broken.Economy.StarterCards = { "does_not_exist" }
+		broken.Economy.StarterPacks = { does_not_exist = 1 }
 		broken.Cards.List[1].Rarity = "Ultra"
 		broken.Packs.List[1].Collections = { "Nowhere" }
 		local text = table.concat(ConfigCheck.run(broken), "\n")
-		expect(string.find(text, "starter card does_not_exist", 1, true) ~= nil).toBe(true)
+		expect(string.find(text, "starter pack does_not_exist", 1, true) ~= nil).toBe(true)
 		expect(string.find(text, "unknown rarity Ultra", 1, true) ~= nil).toBe(true)
 		expect(string.find(text, "unknown collection Nowhere", 1, true) ~= nil).toBe(true)
 	end)

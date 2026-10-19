@@ -1,5 +1,6 @@
 --!strict
--- BuyPack: server-side purchase and roll. Randomness comes from the server's own Random.
+-- BuyPack puts packs in the pack inventory; OpenPack opens owned packs with server-side rolls
+-- (owner decision Q1). Randomness comes from the server's own Random.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -16,16 +17,34 @@ local PackService = {}
 
 local rng = Random.new()
 
-function PackService:Start()
-	Net.onInvoke(Remotes.Functions.BuyPack, {
+local function packArgs(): { Validate.Checker }
+	return {
 		Validate.oneOf(Config.Packs.ById),
 		Validate.integer(1, Config.Game.Limits.MaxPacksPerPurchase),
-	}, function(player: Player, packId: string, amount: number)
+	}
+end
+
+function PackService:Start()
+	Net.onInvoke(Remotes.Functions.BuyPack, packArgs(), function(player: Player, packId: string, amount: number)
 		local data = DataService:GetData(player)
 		if not data then
 			return { ok = false, error = "Data not loaded" }
 		end
-		local ok, result = PackShop.buy(data, packId, amount, {
+		local ok, result = PackShop.buy(data, packId, amount)
+		if not ok then
+			return { ok = false, error = result }
+		end
+		DataService:Changed(player, "Currency")
+		DataService:Changed(player, "Packs")
+		return { ok = true, packId = packId, owned = PackShop.owned(data, packId) }
+	end)
+
+	Net.onInvoke(Remotes.Functions.OpenPack, packArgs(), function(player: Player, packId: string, amount: number)
+		local data = DataService:GetData(player)
+		if not data then
+			return { ok = false, error = "Data not loaded" }
+		end
+		local ok, result = PackShop.open(data, packId, amount, {
 			ownerId = player.UserId,
 			now = os.time(),
 			roll = function()
@@ -35,25 +54,26 @@ function PackService:Start()
 		if not ok then
 			return { ok = false, error = result }
 		end
-		local purchase: PackShop.Purchase = result
-		DataService:Patched(player, "Cards", purchase.NewInstanceIds)
-		DataService:Patched(player, "Discovered", purchase.DiscoveredIds)
+		local opening: PackShop.Opening = result
+		DataService:Patched(player, "Cards", opening.NewInstanceIds)
+		DataService:Patched(player, "Discovered", opening.DiscoveredIds)
+		DataService:Changed(player, "Packs")
 		DataService:Changed(player, "Currency")
 		DataService:Changed(player, "Progression")
 		DataService:Changed(player, "Stats")
-		if purchase.LevelsGained > 0 then
+		if opening.LevelsGained > 0 then
 			DataService:Notify(
 				player,
-				`Level up! You reached level {data.Progression.Level} (+{purchase.TreatsGained} Treats)`,
+				`Level up! You reached level {data.Progression.Level} (+{opening.TreatsGained} Treats)`,
 				"success"
 			)
 		end
 		return {
 			ok = true,
 			packId = packId,
-			cards = purchase.Cards,
-			levelsGained = purchase.LevelsGained,
-			treatsGained = purchase.TreatsGained,
+			cards = opening.Cards,
+			levelsGained = opening.LevelsGained,
+			treatsGained = opening.TreatsGained,
 		}
 	end)
 end

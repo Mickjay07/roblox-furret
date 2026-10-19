@@ -4,14 +4,15 @@ A Roblox collectible card tycoon game. The source code lives in this repository 
 Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 
 > **Status:** The foundation and an interim core loop are implemented: data-driven config,
-> server-authoritative packs, inventory, UI-based stands, income, upgrades and binders, with
-> session-locked persistence.
+> server-authoritative packs (bought into an inventory, opened for 5 cards), inventory,
+> UI-based stands that accumulate collectable earnings, offline earnings, upgrades and
+> binders, with session-locked persistence.
 >
 > The recovered master specification ([docs/SPEC.md](docs/SPEC.md)) is now the source of
 > truth.
 >
-> - [docs/STATUS.md](docs/STATUS.md) audits every requirement against it: 16 conflicts, and
->   the core 3D features (plots, stands, in-world ferret illustrations) are not built yet.
+> - [docs/STATUS.md](docs/STATUS.md) audits every requirement against it: 11 conflicts remain,
+>   and the core 3D features (plots, stands, in-world ferret illustrations) are not built yet.
 > - [docs/ROADMAP.md](docs/ROADMAP.md) gives the next steps.
 >
 > Nothing has been play-tested in Roblox Studio yet. See [DEVLOG.md](DEVLOG.md).

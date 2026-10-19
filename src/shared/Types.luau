@@ -106,8 +106,13 @@ export type PlayerData = {
 	Cards: { [string]: CardInstance },
 	NextCardSerial: number,
 	Discovered: { [string]: DiscoveryEntry },
+	-- Unopened packs owned: pack id -> count.
+	Packs: { [string]: number },
 	-- Slot index (as a string, so the table saves as a dictionary) -> card instance id.
 	Display: { [string]: string },
+	-- Uncollected stand earnings (slot index -> amount) and the last time the player was
+	-- online (Unix seconds, 0 = never), used for capped offline earnings.
+	Income: { LastOnline: number, Pending: { [string]: number } },
 	Upgrades: { [string]: number },
 	Collections: { Claimed: { [string]: boolean } },
 	Quests: { Active: { [string]: number }, Completed: { [string]: boolean } },

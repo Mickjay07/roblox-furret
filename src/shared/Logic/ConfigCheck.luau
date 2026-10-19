@@ -99,10 +99,16 @@ function ConfigCheck.run(config: any?): { string }
 		end
 	end
 
-	for _, cardId in Config.Economy.StarterCards do
-		if not seenIds[cardId] then
-			problem(`starter card {cardId} does not exist`)
+	for packId, count in Config.Economy.StarterPacks do
+		if not Config.Packs.ById[packId] then
+			problem(`starter pack {packId} does not exist`)
+		elseif count % 1 ~= 0 or count < 1 then
+			problem(`starter pack {packId}: count must be a positive integer`)
 		end
+	end
+	local income = Config.Economy.Income
+	if income.StandCapSeconds <= 0 or income.OfflineCapSeconds < 0 or income.OfflineRate < 0 then
+		problem("income: StandCapSeconds must be positive, offline settings non-negative")
 	end
 
 	for currency in Config.Economy.StartingCurrency do

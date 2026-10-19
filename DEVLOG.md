@@ -3,6 +3,60 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Owner decisions Q1–Q4 applied (start of Phase A)
+
+**Decisions** (owner, in Czech; recorded in `docs/STATUS.md`):
+
+| # | Decision |
+| --- | --- |
+| Q1 | Packs go to the inventory; the player opens them when they want |
+| Q2 | Five cards per pack |
+| Q3 | Both: each stand accumulates money, and the player can also collect centrally |
+| Q4 | On joining, the player automatically gets their own free plot (binding for roadmap A3; no plots exist yet) |
+
+**Changed**
+- **Packs (C1):**
+  - `PackShop.buy` now puts packs in a new `Packs` inventory.
+  - New `PackShop.open` and `OpenPack` remote; opening checks ownership and backpack space
+    before any change.
+  - `PackShop.grant` adds packs for rewards.
+  - `CardsPerOpen = 5` for every pack.
+- **Starter (C5):** $500 (spec §32) plus 3 Burrow Packs, granted once. The starter cards and
+  their auto-placement were removed. The welcome toast points to PACKS.
+- **Stand earnings (C4):** new pure `Logic/IncomeLedger`.
+  - Each occupied stand accumulates its effective income, capped at 2 h of that income.
+  - `CollectEarnings(slot)` collects one stand; slot 0 collects every stand.
+  - Whole cash is paid out; the fraction stays on the stand. Earnings belong to the stand,
+    so they survive a card swap.
+  - `EconomyService` no longer credits Cash directly.
+- **Offline earnings (§10):**
+  - `Income.LastOnline` is updated every tick, so a crash never double-counts.
+  - On load, offline time is capped at 2 h (×`OfflineRate` 1) and credited onto the stands,
+    with a toast that mentions the cap.
+- **Schema:** new fields `Packs` and `Income { LastOnline, Pending }`. They are additive, so
+  `reconcile` fills them into existing v1 profiles (test added). No version bump.
+- **Client:**
+  - Packs rows show BUY (greys out when unaffordable or locked: C15) and OPEN (n).
+  - The HUD has a central COLLECT $X button.
+  - My Stands has per-stand COLLECT buttons, updated in place, plus COLLECT ALL.
+- **`scripts/simulate.luau`** follows the new flow (open starter packs, buy then open,
+  collect every 10 s). Pacing with 5 cards per pack:
+  - Snack Pack unlocks at about 13 minutes, Knight at about 40 and Midnight at about 1h33.
+  - It is faster than before; the rebalance to the §32 rarity bands is still roadmap A8.
+- **Interim values (config, not from the spec):** 3 starter packs; 2 h stand cap; 2 h
+  offline cap; offline rate 1.
+
+**Verified (cloud container)**
+- `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: StyLua, Selene (offline std), Rojo build
+  and luau-lsp all pass. Lune **131 passed, 0 failed**: 13 new IncomeLedger tests and 8 new
+  pack inventory and opening tests; the starter, config and migration tests were updated.
+- STATUS summary is now: ✅ 58 · 🟡 14 · 🟠 37 · ⬜ 58 · ❌ 11.
+
+**Not verified**
+- No Roblox Studio session has been run: the new UI, remotes, offline toast and persistence
+  of `Packs` and `Income` are untested at runtime. The checklist is in TESTING.md 1.3, 1.4
+  and 1.6.
+
 ## 2026-10-19: Audit against the recovered specification
 
 **Input:** the owner committed the original master specification to `docs/SPEC.md`

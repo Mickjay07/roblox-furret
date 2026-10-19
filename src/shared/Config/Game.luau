@@ -29,6 +29,8 @@ return table.freeze({
 		GetSnapshot = table.freeze({ Rate = 0.5, Burst = 3 }),
 		UpdateSetting = table.freeze({ Rate = 3, Burst = 6 }),
 		BuyPack = table.freeze({ Rate = 2, Burst = 4 }),
+		OpenPack = table.freeze({ Rate = 2, Burst = 4 }),
+		CollectEarnings = table.freeze({ Rate = 8, Burst = 16 }),
 		SellCards = table.freeze({ Rate = 2, Burst = 4 }),
 		PlaceCard = table.freeze({ Rate = 6, Burst = 12 }),
 		RemoveCard = table.freeze({ Rate = 6, Burst = 12 }),

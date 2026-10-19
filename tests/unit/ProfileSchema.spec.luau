@@ -85,6 +85,20 @@ describe("ProfileSchema", function()
 		expect(string.find(reason, "boom", 1, true) ~= nil).toBe(true)
 	end)
 
+	it("adds the Packs and Income fields to existing v1 profiles without a version bump", function()
+		local old = ProfileSchema.defaults()
+		old.Packs = nil
+		old.Income = nil
+		old.Currency.Cash = 77
+		local ok, data = ProfileSchema.migrate(old)
+		expect(ok).toBe(true)
+		expect(data.SchemaVersion).toBe(1)
+		expect(next(data.Packs)).toBeNil()
+		expect(data.Income.LastOnline).toBe(0)
+		expect(next(data.Income.Pending)).toBeNil()
+		expect(data.Currency.Cash).toBe(77)
+	end)
+
 	it("migrates current-version data by reconciling it", function()
 		local ok, data = ProfileSchema.migrate({ SchemaVersion = ProfileSchema.VERSION, Currency = { Cash = 9 } })
 		expect(ok).toBe(true)

@@ -125,10 +125,12 @@ The checklist has two parts:
       never touches real data.
 
 ### 1.3 Persistence: real DataStore (API access ON, test place)
-- [ ] First join: welcome toast; 1,500 cash; two starter cards already on stands; HUD shows
-      +2 CASH/S. (These values conflict with the spec: C5 and C10.)
-- [ ] Buy a pack, place a card, buy an upgrade, change a setting, then Stop. Play again:
-      cards, stands, upgrade levels, cash, settings and level all persist, and **no**
+- [ ] First join: welcome toast; 500 cash; 3 Burrow Packs owned (PACKS window shows
+      "OPEN (3)"); no cards yet; HUD shows +0 CASH/S and NOTHING TO COLLECT.
+- [ ] Open a pack, buy a pack (keep it unopened), place a card, let a stand accumulate,
+      buy an upgrade, change a setting, then Stop. Play again: cards, unopened packs,
+      stands, uncollected stand earnings, upgrade levels, cash, settings and level all
+      persist, and **no**
       second welcome toast or starter grant appears.
 - [ ] Leave and rejoin within a few seconds (Clients and Servers: close a client, then add
       a player): the data loads. The Output may show "locked by another server, retrying"
@@ -148,6 +150,11 @@ nothing changes, and the server Output shows at most a `[Net]` warning.
 local R = game.ReplicatedStorage.Remotes
 local function try(name, ...) local r = R[name]:InvokeServer(...) print(name, r.ok, r.error) end
 try("BuyPack", "midnight_pack", 1)          -- locked pack: refused with a reason
+try("OpenPack", "snack_pack", 1)           -- a pack you don't own: refused
+try("OpenPack", "burrow_pack", 99)         -- more than you own / over the limit: refused
+try("CollectEarnings", 0)                   -- legitimate: collects whatever is pending
+try("CollectEarnings", 0)                   -- immediately again: collected = 0 (no double payout)
+try("CollectEarnings", -1)                  -- invalid slot
 try("BuyPack", "burrow_pack", 0)            -- invalid amount
 try("BuyPack", "burrow_pack", 1/0)          -- infinity rejected
 try("BuyPack", "burrow_pack", 1, "extra")   -- extra argument rejected
@@ -171,13 +178,23 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
 - [ ] Settings: volume steps, Notifications toggle (non-error toasts stop) and Reduced
       Motion persist across rejoin.
 
-### 1.6 Current core loop (UI-only stands, an interim design: C3 and C4)
-- [ ] Buy a Burrow Pack: cash drops by exactly the price; the reveal shows 3 cards with
-      "1 IN X" and NEW! badges; tapping closes it.
-- [ ] Buying ×10 charges 10 × the price and reveals 30 cards. Buying with too little cash
-      shows an error and charges nothing.
-- [ ] My Stands: Place Best fills the stands; cash/s in the HUD matches the window; cash
-      rises every second.
+### 1.6 Current core loop (UI-only stands, an interim design: C3)
+- [ ] PACKS: OPEN on a starter pack reveals **5** cards with "1 IN X" and NEW! badges, and
+      the owned count drops by one. Tapping closes the reveal.
+- [ ] BUY adds packs to the owned count without opening them (toast "Bought …"), and cash
+      drops by exactly the price. Unaffordable or locked buy buttons are grey and charge
+      nothing.
+- [ ] Opening with a ×N quantity opens min(N, owned) packs (5 cards each).
+- [ ] My Stands: Place Best fills the stands; cash/s in the HUD matches the window.
+- [ ] **Stand earnings (Q3):** cash does **not** rise by itself. Each stand shows
+      "COLLECT $X", growing every second. Collecting one stand adds exactly that amount;
+      the HUD COLLECT and COLLECT ALL buttons take everything at once, and a second click
+      gives nothing.
+- [ ] A stand stops growing at its cap (2 hours of its income).
+- [ ] **Offline earnings:** with real DataStores, place cards, collect, stop, wait a few
+      minutes, then play again. A toast reports offline earnings roughly equal to cash/s ×
+      the minutes away, and the stands show them ready to collect. After more than 2 hours
+      away, the toast mentions the cap.
 - [ ] Backpack: sorting; place on and remove from a stand; favourite; sell. Favourite and
       on-stand cards cannot be sold, and the reason is shown.
 - [ ] Upgrades: costs rise per level; MAXED at the cap; Display Stands adds a slot.
@@ -212,9 +229,9 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
 - [ ] With 2 players and full plots, effects on distant plots are reduced, and the frame
       rate stays acceptable on phone emulation.
 
-### 2.3 Income, collection and offline earnings (§10, roadmap A6)
-- [ ] Stands accumulate earnings; collecting adds exactly the shown amount; collecting
-      twice quickly pays once.
+### 2.3 Income, collection and offline earnings at physical stands (§10, roadmap A6 remainder)
+- [ ] Approaching a stand shows its accumulated earnings; the collect prompt pays exactly
+      that amount once; floating "+$" indicators appear.
 - [ ] Spamming the collect remote from the command bar never pays more than was
       accumulated.
 - [ ] Changing the local clock has no effect on earnings.
@@ -222,9 +239,7 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
       offline payout is shown, matches displayed income × time, and is capped at the
       configured limit.
 
-### 2.4 Pack inventory and opening (§7, roadmap A7)
-- [ ] A new player receives the starter currency and starter packs once only (rejoin to
-      confirm).
+### 2.4 Pack opening sequence (§7.5, roadmap A7 remainder)
 - [ ] Opening a pack plays the sequence (pack, blur, open, flip, rarity effect), and the
       card is already in the backpack before the reveal ends.
 - [ ] Skip-animations works after the first viewing. Multiple packs end on a results

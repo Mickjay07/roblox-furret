@@ -10,8 +10,12 @@ local Remotes = {
 	Functions = {
 		GetSnapshot = "GetSnapshot",
 		UpdateSetting = "UpdateSetting",
-		-- (packId, amount) -> { cards = { OpenedCard }, levelsGained, treatsGained }
+		-- (packId, amount) -> { owned } buys packs into the pack inventory
 		BuyPack = "BuyPack",
+		-- (packId, amount) -> { cards = { OpenedCard }, levelsGained, treatsGained }
+		OpenPack = "OpenPack",
+		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
+		CollectEarnings = "CollectEarnings",
 		-- (instanceIds) -> { earned }
 		SellCards = "SellCards",
 		-- (instanceId, favorite)

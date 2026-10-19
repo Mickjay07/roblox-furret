@@ -8,7 +8,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Types = require(Shared.Types)
 local Economy = require(Shared.Logic.Economy)
+local IncomeLedger = require(Shared.Logic.IncomeLedger)
 local Progression = require(Shared.Logic.Progression)
+local Remotes = require(Shared.Remotes)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
@@ -18,13 +20,14 @@ local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local DataController = require(script.Parent.DataController)
 local NotificationController = require(script.Parent.NotificationController)
+local Request = require(script.Parent.Parent.Lib.Request)
 
 local HUDController = {}
 
 -- Navigation entries: window name, label, button style. Windows that are not registered
 -- (features not built yet) show a "coming soon" notice instead of opening.
 local TOP_NAV = {
-	{ window = "Packs", text = "BUY PACKS", style = "Green" },
+	{ window = "Packs", text = "PACKS", style = "Green" },
 	{ window = "Display", text = "MY STANDS", style = "Blue" },
 }
 local RIGHT_NAV = {
@@ -49,7 +52,7 @@ end
 local function buildStats(gui: ScreenGui)
 	local panel = Create("Frame", {
 		Name = "Stats",
-		Size = UDim2.fromOffset(320, 200),
+		Size = UDim2.fromOffset(320, 262),
 		Position = UDim2.new(0, 16, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
@@ -123,6 +126,30 @@ local function buildStats(gui: ScreenGui)
 	bar.Position = UDim2.new(0, 8, 1, -14)
 	bar.Parent = levelPlate
 
+	-- Central collection of every stand's earnings (owner decision Q3).
+	local collect = Components.button({
+		Name = "CollectAll",
+		Text = "NOTHING TO COLLECT",
+		Style = "Gray",
+		Size = UDim2.fromOffset(260, 52),
+		LayoutOrder = 5,
+		Parent = panel,
+		OnClick = function()
+			local result = Request(Remotes.Functions.CollectEarnings, 0)
+			if result.ok and (result.collected or 0) > 0 then
+				NotificationController:Push(`Collected ${Format.short(result.collected, 1e6)}`, "success")
+			end
+		end,
+	})
+	local function refreshPending(data: Types.PlayerData)
+		local pending = math.floor(IncomeLedger.pendingTotal(data))
+		Components.setButtonText(
+			collect,
+			if pending > 0 then `COLLECT ${Format.short(pending)}` else "NOTHING TO COLLECT"
+		)
+		Components.setButtonStyle(collect, if pending > 0 then "Green" else "Gray")
+	end
+
 	local function refreshCurrency(data: Types.PlayerData)
 		cash.Text = cashText(data.Currency.Cash or 0)
 		treats.Text = Format.commas(data.Currency.Treats or 0)
@@ -141,6 +168,7 @@ local function buildStats(gui: ScreenGui)
 		DataController:Observe(key, refreshIncome)
 	end
 	DataController:Observe("Progression", refreshLevel)
+	DataController:Observe("Income", refreshPending)
 end
 
 local function buildTopNav(gui: ScreenGui)

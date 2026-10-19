@@ -25,7 +25,8 @@ ReplicatedStorage.Shared          (src/shared)  - required by server and client
   Logic/                          pure game rules
     CardRegistry, Economy, Progression, Collections, PackRoller, Grading,
     Wallet, Inventory, Account, ConfigCheck,
-    PackShop, Display, Market, UpgradeShop     (gameplay transactions)
+    PackShop, Display, Market, UpgradeShop,    (gameplay transactions)
+    IncomeLedger                               (stand earnings, collection, offline)
   Util/                           WeightedRandom, Validate, RateLimiter, Signal, Format
 
 ServerScriptService.Server        (src/server)
@@ -37,10 +38,10 @@ ServerScriptService.Server        (src/server)
   Services/
     DataService                   load/save lifecycle, replication, leaderstats
     SettingsService               UpdateSetting
-    PackService                   BuyPack (server-side Random)
+    PackService                   BuyPack (to pack inventory), OpenPack (server-side Random)
     CardService                   PlaceCard, RemoveCard, PlaceBest, SellCards, SetFavorite
     UpgradeService                BuyUpgrade
-    EconomyService                passive income tick
+    EconomyService                stand earnings tick, CollectEarnings, offline earnings
 
 StarterPlayerScripts.Client       (src/client)
   init.client                     bootstrap: Init/Start of Controllers
@@ -172,7 +173,8 @@ use the mock store.
 - Handlers return `{ ok = true, ... }` or `{ ok = false, error = "..." }`.
 
 Requests (client to server): `GetSnapshot`, `UpdateSetting(key, value)`,
-`BuyPack(packId, amount 1-10)`, `PlaceCard(instanceId, slot 0-100)`,
+`BuyPack(packId, amount 1-10)` (into the pack inventory), `OpenPack(packId, amount 1-10)`,
+`CollectEarnings(slot 0-100)` (0 = every stand), `PlaceCard(instanceId, slot 0-100)`,
 `RemoveCard(instanceId)`, `PlaceBest()`, `SellCards({instanceId} up to 50)`,
 `SetFavorite(instanceId, bool)` and `BuyUpgrade(upgradeId)`. Instance ids must match
 `^%-?%d+%-%d+$` (Studio test players have negative UserIds), and pack and upgrade ids must exist in Config.

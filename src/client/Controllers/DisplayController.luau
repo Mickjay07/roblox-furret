@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
+local IncomeLedger = require(Shared.Logic.IncomeLedger)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
@@ -23,6 +24,36 @@ local DisplayController = {}
 
 local grid: ScrollingFrame
 local summary: TextLabel
+-- Per-stand collect buttons, updated in place as earnings accrue (no grid rebuild).
+local collectButtons: { [string]: TextButton } = {}
+
+local function updatePending()
+	local data = DataController:Get()
+	if not data then
+		return
+	end
+	for slotKey, button in collectButtons do
+		local amount = math.floor(IncomeLedger.pending(data, slotKey))
+		button.Visible = amount > 0
+		Components.setButtonText(button, `COLLECT ${Format.short(amount)}`)
+	end
+end
+
+local function addCollectButton(cell: GuiObject, slot: number)
+	local slotKey = tostring(slot)
+	collectButtons[slotKey] = Components.button({
+		Name = "Collect",
+		Text = "",
+		Style = "Green",
+		Size = UDim2.new(0.92, 0, 0.17, 0),
+		Position = UDim2.new(0.5, 0, 1, -6),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Parent = cell,
+		OnClick = function()
+			Request(Remotes.Functions.CollectEarnings, slot)
+		end,
+	})
+end
 
 local function emptySlot(order: number, text: string, locked: boolean): TextButton
 	local slot: TextButton = Create("TextButton", {
@@ -56,6 +87,7 @@ local function render()
 			child:Destroy()
 		end
 	end
+	table.clear(collectButtons)
 	local slots = Economy.displaySlotCount(data)
 	for slot = 1, slots do
 		local id = data.Display[tostring(slot)]
@@ -71,12 +103,14 @@ local function render()
 				end,
 			})
 			tile.Parent = grid
+			addCollectButton(tile, slot)
 		else
 			local empty = emptySlot(slot, "EMPTY", false)
 			empty.Activated:Connect(function()
 				BackpackController:OpenWith(nil)
 			end)
 			empty.Parent = grid
+			addCollectButton(empty, slot)
 		end
 	end
 	local locked = emptySlot(slots + 1, "BUY MORE IN UPGRADES", true)
@@ -85,6 +119,7 @@ local function render()
 	end)
 	locked.Parent = grid
 	summary.Text = `{slots} STANDS  |  +{Format.short(Economy.totalIncome(data), 1e6)} CASH/S`
+	updatePending()
 end
 
 function DisplayController:Start()
@@ -95,10 +130,21 @@ function DisplayController:Start()
 		Build = function(content: Frame)
 			summary = Components.label({
 				Text = "",
-				Size = UDim2.new(1, -240, 0, 40),
+				Size = UDim2.new(1, -460, 0, 40),
 				XAlign = Enum.TextXAlignment.Left,
 				Color = Theme.Colors.Cash,
 				Parent = content,
+			})
+			Components.button({
+				Text = "COLLECT ALL",
+				Style = "Green",
+				Size = UDim2.fromOffset(200, 48),
+				Position = UDim2.new(1, -232, 0, -4),
+				AnchorPoint = Vector2.new(1, 0),
+				Parent = content,
+				OnClick = function()
+					Request(Remotes.Functions.CollectEarnings, 0)
+				end,
 			})
 			Components.button({
 				Text = "PLACE BEST",
@@ -134,6 +180,11 @@ function DisplayController:Start()
 			return render
 		end,
 	})
+	DataController.Changed:Connect(function(changed)
+		if changed == "Income" and Windows.isOpen("Display") then
+			updatePending()
+		end
+	end)
 	for _, key in { "Display", "Cards", "Upgrades", "Discovered" } do
 		DataController.Changed:Connect(function(changed)
 			if changed == key or changed == "*" then
