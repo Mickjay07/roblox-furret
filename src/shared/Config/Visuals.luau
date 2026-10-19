@@ -74,6 +74,28 @@ return table.freeze({
 
 	-- Spec §9: Common gentle idle, Rare subtle blue particles, Epic soft purple glow,
 	-- Legendary golden sparkles, Mythic distinctive aura, Secret unique but cheap.
+	-- HUD artwork layout (Config.Assets "ui.*" images).
+	Hud = table.freeze({
+		-- Currency bar (ui.currency_bar): the money value is a separate TextLabel drawn over
+		-- the bar's empty green area. Aspect = image width / height, and the text box is
+		-- given as fractions of the bar (inset from each edge). These are starting values:
+		-- check them in Studio against the real image and adjust here if the text isn't
+		-- centred on the green area (docs/TESTING.md §1.17).
+		CurrencyBar = table.freeze({
+			Aspect = 4,
+			Width = 360, -- px at UI scale 1 (the whole HUD scales with the screen)
+			TextInsetLeft = 0.3,
+			TextInsetRight = 0.07,
+			TextInsetTop = 0.22,
+			TextInsetBottom = 0.22,
+			MaxTextSize = 44,
+			MinTextSize = 10,
+		}),
+		-- Right rail icons (ui.icon.*): square slots, image drawn with ScaleType.Fit.
+		IconSize = 84,
+		ShowCaptions = true,
+	}),
+
 	RarityEffects = table.freeze({
 		Common = effect(0, nil, 0, nil, 0, 1),
 		Uncommon = effect(0, nil, 0, nil, 0, 1),

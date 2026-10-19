@@ -332,6 +332,24 @@ owned.
 - [ ] Open the backpack after opening packs: it re-renders once per change (no visible
       double rebuild).
 
+### 1.17 Custom HUD artwork (Ferret Frenzy GUI pack)
+- [ ] Client Output after joining: `[Art] Config.Assets ...` lists `ui.icon.settings`,
+      `ui.icon.binder`, `ui.icon.backpack`, `ui.icon.upgrades` and `ui.currency_bar` with
+      their `rbxassetid://` ids; `[Art] preload startup` reports no failures; there is no
+      `[Art] HUD: ... failed to load` warning.
+- [ ] Right rail shows the four custom icons (bag, binder, upgrades, settings), not text
+      buttons; none looks stretched or squashed. Each opens its window (Backpack, Binder,
+      Upgrades, Settings), including when clicking on the caption under it.
+- [ ] Currency bar (left): the art is not distorted; the money value sits **centred on the
+      empty green area**. If it is off, adjust `Config.Visuals.Hud.CurrencyBar`
+      (`Aspect` = image width / height; `TextInset*` = fractions of the bar) and replay.
+- [ ] Large values stay inside the green area and readable: DEV `setcash 999` →
+      `999`; `setcash 1234567` → `1,234,567`; `setcash 999999999` → `999,999,999`;
+      `setcash 1e12` → `1T`; `setcash 1e15` → short form.
+- [ ] Desktop (1920×1080) and mobile (Device emulator, e.g. iPhone SE / iPad): the bar
+      and icons scale with the screen, don't overlap the top buttons or the Collect
+      button, and stay tappable.
+
 ## Part 2: specification features (run when implemented)
 
 ### 2.4 Pack shop extras (§7.3–7.4, roadmap A8)

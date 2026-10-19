@@ -99,6 +99,24 @@ that case, use the **image** id, not the decal id. In Studio, insert the decal a
 directly by the owner; its source file isn't in the repository. The pack opening shows it
 for every unrevealed card. If it's ever set to 0, a drawn back is shown instead.
 
+## HUD artwork (GUI pack)
+
+Uploaded by the owner directly to Roblox (no source files in the repository); mapped in
+`Config/Assets.luau` and used by `HUDController`:
+
+| Key | Asset id | Used for |
+| --- | --- | --- |
+| `ui.icon.settings` | 130827565796014 | Settings button (right rail) |
+| `ui.icon.binder` | 107739782679163 | Binder / card collection button |
+| `ui.icon.backpack` | 99636745658331 | Backpack / inventory button |
+| `ui.icon.upgrades` | 104856714688781 | Upgrades button |
+| `ui.currency_bar` | 89670723455193 | Money display (value drawn as a TextLabel over its green area) |
+
+All are drawn with `ScaleType.Fit`, so they keep their own aspect ratio. The currency text
+box is positioned by `Config.Visuals.Hud.CurrencyBar` (aspect and insets). The image's
+real pixel size wasn't available in this repository, so check it in Studio
+(TESTING.md §1.17) and adjust those numbers if the text isn't centred on the green area.
+
 ## Thumbnails for small tiles (optional upload)
 
 `process_card_art.py` also writes `assets/processed/pack1/thumbs/card_00N_<name>.png`

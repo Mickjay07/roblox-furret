@@ -6,7 +6,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
 local Types = require(Shared.Types)
+local CardArt = require(Shared.Logic.CardArt)
 local Economy = require(Shared.Logic.Economy)
 local IncomeLedger = require(Shared.Logic.IncomeLedger)
 local Progression = require(Shared.Logic.Progression)
@@ -20,6 +22,7 @@ local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local DataController = require(script.Parent.DataController)
 local NotificationController = require(script.Parent.NotificationController)
+local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
 local Request = require(script.Parent.Parent.Lib.Request)
 
 local HUDController = {}
@@ -31,11 +34,13 @@ local TOP_NAV = {
 	{ window = "Display", text = "MY STANDS", style = "Blue" },
 	{ window = "__home", text = "MY PLOT", style = "Orange" },
 }
+-- `icon` is a Config.Assets key for the custom HUD art; without an uploaded image the entry
+-- falls back to a text button.
 local RIGHT_NAV = {
-	{ window = "Backpack", text = "BAG", style = "Orange" },
-	{ window = "Binder", text = "BINDER", style = "Purple" },
-	{ window = "Upgrades", text = "UPGRADES", style = "Green" },
-	{ window = "Settings", text = "SETTINGS", style = "Gray" },
+	{ window = "Backpack", text = "BAG", style = "Orange", icon = "ui.icon.backpack" },
+	{ window = "Binder", text = "BINDER", style = "Purple", icon = "ui.icon.binder" },
+	{ window = "Upgrades", text = "UPGRADES", style = "Green", icon = "ui.icon.upgrades" },
+	{ window = "Settings", text = "SETTINGS", style = "Gray", icon = "ui.icon.settings" },
 }
 
 local function navigate(window: string)
@@ -54,10 +59,92 @@ local function cashText(amount: number): string
 	return if amount < 1e9 then Format.commas(amount) else Format.short(amount)
 end
 
+-- The money display: the custom currency bar art with the value as a separate TextLabel
+-- over its green area (Config.Visuals.Hud.CurrencyBar), or the plain badge row when the
+-- art isn't available. Returns the row and the label that shows the cash value.
+local function buildCashRow(panel: Frame): (Frame, TextLabel)
+	local layout = Config.Visuals.Hud.CurrencyBar
+	local image = CardArt.image("ui.currency_bar")
+	if not image then
+		ArtDiagnostics.fallback("HUD", "ui.currency_bar")
+		local row = Create("Frame", {
+			Name = "Row1",
+			Size = UDim2.new(1, 0, 0, 52),
+			BackgroundTransparency = 1,
+			LayoutOrder = 1,
+			Parent = panel,
+		})
+		Components.badge("$", Theme.Colors.Cash, UDim2.fromOffset(52, 52)).Parent = row
+		local label = Components.label({
+			Name = "Cash",
+			Text = "0",
+			Size = UDim2.new(1, -64, 1, 0),
+			Position = UDim2.fromOffset(64, 0),
+			Color = Theme.Colors.Cash,
+			XAlign = Enum.TextXAlignment.Left,
+			StrokeThickness = 3,
+			Parent = row,
+		})
+		return row, label
+	end
+	ArtDiagnostics.watch("HUD", "ui.currency_bar", image)
+	local row = Create("Frame", {
+		Name = "CurrencyBar",
+		Size = UDim2.fromOffset(layout.Width, layout.Width / layout.Aspect),
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		Parent = panel,
+	})
+	-- Decorative: keeps its aspect (Fit) and never takes input.
+	Create("ImageLabel", {
+		Name = "Art",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Image = image,
+		ScaleType = Enum.ScaleType.Fit,
+		Active = false,
+		ZIndex = 1,
+		Parent = row,
+	})
+	local label: TextLabel = Create("TextLabel", {
+		Name = "Cash",
+		Text = "0",
+		Position = UDim2.fromScale(layout.TextInsetLeft, layout.TextInsetTop),
+		Size = UDim2.fromScale(
+			1 - layout.TextInsetLeft - layout.TextInsetRight,
+			1 - layout.TextInsetTop - layout.TextInsetBottom
+		),
+		BackgroundTransparency = 1,
+		Font = Theme.Font,
+		TextColor3 = Theme.Colors.Text,
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Active = false,
+		ZIndex = 2,
+		Parent = row,
+	}, {
+		-- TextScaled shrinks long values (millions, billions) to fit; these keep short values
+		-- from growing huge and long ones readable.
+		Create("UITextSizeConstraint", { MaxTextSize = layout.MaxTextSize, MinTextSize = layout.MinTextSize }),
+		Create("UIStroke", {
+			Color = Theme.Colors.TextStroke,
+			Thickness = 2.5,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		}),
+	})
+	return row, label
+end
+
 local function buildStats(gui: ScreenGui)
+	local barLayout = Config.Visuals.Hud.CurrencyBar
+	local hasBar = CardArt.image("ui.currency_bar") ~= nil
+	local width = if hasBar then math.max(320, barLayout.Width) else 320
+	local cashHeight = if hasBar then barLayout.Width / barLayout.Aspect else 52
 	local panel = Create("Frame", {
 		Name = "Stats",
-		Size = UDim2.fromOffset(320, 262),
+		-- Rows: cash, income (26), treats (40), level (40), collect (52), 6 px gaps.
+		Size = UDim2.fromOffset(width, cashHeight + 26 + 40 + 40 + 52 + 4 * 6),
 		Position = UDim2.new(0, 16, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
@@ -80,18 +167,7 @@ local function buildStats(gui: ScreenGui)
 		})
 	end
 
-	local cashRow = row(1, 52)
-	Components.badge("$", Theme.Colors.Cash, UDim2.fromOffset(52, 52)).Parent = cashRow
-	local cash = Components.label({
-		Name = "Cash",
-		Text = "0",
-		Size = UDim2.new(1, -64, 1, 0),
-		Position = UDim2.fromOffset(64, 0),
-		Color = Theme.Colors.Cash,
-		XAlign = Enum.TextXAlignment.Left,
-		StrokeThickness = 3,
-		Parent = cashRow,
-	})
+	local _, cash = buildCashRow(panel)
 
 	local income = Components.label({
 		Name = "Income",
@@ -208,9 +284,13 @@ local function buildTopNav(gui: ScreenGui)
 end
 
 local function buildRightRail(gui: ScreenGui)
+	local iconSize = Config.Visuals.Hud.IconSize
+	local captions = Config.Visuals.Hud.ShowCaptions
+	-- Each slot: the icon (or a 76 px text button) plus room for its caption.
+	local slot = math.max(76, iconSize + (if captions then math.floor(iconSize * 0.24) else 0))
 	local rail = Create("Frame", {
 		Name = "RightRail",
-		Size = UDim2.fromOffset(112, 4 * 88),
+		Size = UDim2.fromOffset(math.max(112, iconSize), #RIGHT_NAV * (slot + 10)),
 		Position = UDim2.new(1, -16, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
@@ -224,16 +304,42 @@ local function buildRightRail(gui: ScreenGui)
 	})
 	Components.autoScale(rail)
 	for i, entry in RIGHT_NAV do
-		Components.button({
-			Text = entry.text,
-			Style = entry.style,
-			Size = UDim2.fromOffset(112, 76),
-			LayoutOrder = i,
-			Parent = rail,
-			OnClick = function()
-				navigate(entry.window)
-			end,
-		})
+		local image = CardArt.image(entry.icon)
+		if image then
+			ArtDiagnostics.watch("HUD", entry.icon, image)
+			-- Wrapper reserves the caption's height so the list layout spaces icons evenly.
+			local holder = Create("Frame", {
+				Name = entry.window,
+				Size = UDim2.fromOffset(math.max(112, iconSize), slot),
+				BackgroundTransparency = 1,
+				LayoutOrder = i,
+				Parent = rail,
+			})
+			local button = Components.iconButton({
+				Image = image,
+				Caption = if captions then entry.text else nil,
+				Size = iconSize,
+				Name = "Button",
+				Parent = holder,
+				OnClick = function()
+					navigate(entry.window)
+				end,
+			})
+			button.AnchorPoint = Vector2.new(1, 0)
+			button.Position = UDim2.fromScale(1, 0)
+		else
+			ArtDiagnostics.fallback("HUD", entry.icon)
+			Components.button({
+				Text = entry.text,
+				Style = entry.style,
+				Size = UDim2.fromOffset(112, 76),
+				LayoutOrder = i,
+				Parent = rail,
+				OnClick = function()
+					navigate(entry.window)
+				end,
+			})
+		end
 	end
 end
 

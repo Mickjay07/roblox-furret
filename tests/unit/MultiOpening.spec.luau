@@ -53,7 +53,8 @@ describe("Shared card back asset", function()
 		expect(CardArt.image("pack.pack1.front")).toBe("rbxassetid://104453844983670")
 		local ids = CardArt.allContentIds()
 		expect(table.find(ids, "rbxassetid://129297477524368") ~= nil).toBe(true)
-		expect(#ids).toBe(8)
+		-- 6 card fronts + pack front + card back + 5 HUD images.
+		expect(#ids).toBe(13)
 	end)
 
 	it("uses a thumbnail only when one is uploaded, else the full image", function()

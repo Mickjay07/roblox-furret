@@ -155,3 +155,26 @@ describe("CardArt fallback", function()
 		expect(CardArt.aspect("unknown")).toBeNear(2 / 3, 1e-9)
 	end)
 end)
+
+describe("Custom HUD artwork", function()
+	it("maps each HUD element to its uploaded image id in rbxassetid format", function()
+		local expected = {
+			["ui.icon.settings"] = "rbxassetid://130827565796014",
+			["ui.icon.binder"] = "rbxassetid://107739782679163",
+			["ui.icon.backpack"] = "rbxassetid://99636745658331",
+			["ui.icon.upgrades"] = "rbxassetid://104856714688781",
+			["ui.currency_bar"] = "rbxassetid://89670723455193",
+		}
+		for key, contentId in expected do
+			expect(CardArt.image(key)).toBe(contentId)
+		end
+	end)
+
+	it("leaves room for the currency text inside the bar", function()
+		local bar = Config.Visuals.Hud.CurrencyBar
+		expect(bar.Aspect > 1).toBe(true) -- a wide bar
+		expect(1 - bar.TextInsetLeft - bar.TextInsetRight > 0.4).toBe(true)
+		expect(1 - bar.TextInsetTop - bar.TextInsetBottom > 0.3).toBe(true)
+		expect(bar.MinTextSize < bar.MaxTextSize).toBe(true)
+	end)
+end)

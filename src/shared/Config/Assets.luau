@@ -32,6 +32,13 @@ local function image(processed: string, source: string, assetId: number): ImageA
 	}
 end
 
+-- Custom GUI artwork (uploaded to Roblox by the owner; no source files in the repository).
+-- Width/Height 0 = not recorded: the UI draws these with ScaleType.Fit, which keeps the
+-- image's own aspect ratio whatever its size.
+local function ui(assetId: number): ImageAsset
+	return { Processed = "", Source = "", Width = 0, Height = 0, AssetId = assetId }
+end
+
 local Images: { [string]: ImageAsset } = {
 	["card.pack1.sandy"] = image(
 		"assets/processed/pack1/card_001_sandy.png",
@@ -72,6 +79,13 @@ local Images: { [string]: ImageAsset } = {
 	-- directly by the owner; there is no source file in the repository. Displayed at the
 	-- card fronts' 2:3 shape.
 	["card.back"] = image("", "", 129297477524368),
+
+	-- HUD (Ferret Frenzy GUI pack).
+	["ui.icon.settings"] = ui(130827565796014),
+	["ui.icon.binder"] = ui(107739782679163),
+	["ui.icon.backpack"] = ui(99636745658331),
+	["ui.icon.upgrades"] = ui(104856714688781),
+	["ui.currency_bar"] = ui(89670723455193),
 }
 
 return table.freeze({

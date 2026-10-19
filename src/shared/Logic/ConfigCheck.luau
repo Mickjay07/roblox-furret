@@ -183,6 +183,21 @@ function ConfigCheck.run(config: any?): { string }
 				problem(`visuals: no RarityEffects entry for {rarity.Id}`)
 			end
 		end
+		local hud = (Config.Visuals :: any).Hud
+		local bar = if hud then hud.CurrencyBar else nil
+		if bar then
+			if bar.Aspect <= 0 or bar.Width <= 0 then
+				problem("visuals: Hud.CurrencyBar Aspect and Width must be positive")
+			end
+			if bar.TextInsetLeft + bar.TextInsetRight >= 1 or bar.TextInsetTop + bar.TextInsetBottom >= 1 then
+				problem("visuals: Hud.CurrencyBar text insets leave no room for the text")
+			end
+			for _, inset in { bar.TextInsetLeft, bar.TextInsetRight, bar.TextInsetTop, bar.TextInsetBottom } do
+				if inset < 0 then
+					problem("visuals: Hud.CurrencyBar insets must not be negative")
+				end
+			end
+		end
 	end
 
 	if #Config.Grading.Multipliers ~= 10 or #Config.Grading.Labels ~= 10 or #Config.Grading.SubGradeWeights ~= 10 then

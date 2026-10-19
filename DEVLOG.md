@@ -3,6 +3,32 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Custom HUD artwork (Ferret Frenzy GUI pack)
+
+- `Config/Assets.luau`: `ui.icon.settings` 130827565796014, `ui.icon.binder`
+  107739782679163, `ui.icon.backpack` 99636745658331, `ui.icon.upgrades`
+  104856714688781, `ui.currency_bar` 89670723455193. They resolve through
+  `CardArt.image` → `rbxassetid://<id>`, are preloaded at startup and are listed by the
+  Studio art report.
+- **Right rail** (existing BAG / BINDER / UPGRADES / SETTINGS entries, no new menus): each
+  is now a `Components.iconButton`.
+  - The ImageButton itself takes the click, the art uses `ScaleType.Fit`, and there is a
+    small caption TextLabel underneath.
+  - If an image weren't available, the entry falls back to the old text button.
+- **Money display:** the currency bar art (decorative ImageLabel, `Fit`, `Active = false`)
+  with the value as a separate TextLabel over its green area.
+  - `TextScaled` with a `UITextSizeConstraint` (10–44) and a stroke for readability.
+  - The bar is 360 px wide at UI scale 1, and the whole stats panel scales with the screen
+    (`autoScale`).
+  - Values use commas up to 999,999,999, then the short form.
+- **Unknown sizes:** the images' pixel sizes aren't in the repository (uploaded straight to
+  Roblox; roblox.com isn't reachable from the cloud). The bar's aspect (4:1) and text insets
+  are therefore starting values in `Config.Visuals.Hud.CurrencyBar`, validated by
+  ConfigCheck, to be checked in Studio (TESTING.md §1.17).
+- Tests: HUD asset mapping and currency-bar text room (`CardArt.spec`); preload id count
+  updated. `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: all checks passed, 255 tests.
+  **Not run in Studio.**
+
 ## 2026-10-19: Multi Opening switched to Game Passes
 
 **Problem:** both Multi Opening ids (2038324873 for 3x, 2039938706 for 6x) are **game

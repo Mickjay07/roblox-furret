@@ -164,6 +164,68 @@ function Components.button(props: ButtonProps): TextButton
 	return button
 end
 
+export type IconButtonProps = {
+	Image: string,
+	Caption: string?,
+	Size: number,
+	Name: string?,
+	LayoutOrder: number?,
+	Parent: Instance?,
+	OnClick: (() -> ())?,
+}
+
+-- Image button for custom HUD artwork: the ImageButton itself takes the click; the image
+-- keeps its own aspect ratio (ScaleType.Fit) inside a square slot; the optional caption is
+-- a plain TextLabel, which never takes input.
+function Components.iconButton(props: IconButtonProps): ImageButton
+	local scale = Create("UIScale", { Scale = 1 })
+	-- Square slot for the art; the caption (if any) hangs just below it.
+	local button: ImageButton = Create("ImageButton", {
+		Name = props.Name or props.Caption or "Icon",
+		Image = props.Image,
+		ScaleType = Enum.ScaleType.Fit,
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(props.Size, props.Size),
+		LayoutOrder = props.LayoutOrder or 0,
+	}, { scale })
+	if props.Caption then
+		local captionHeight = math.floor(props.Size * 0.24)
+		local caption = Components.label({
+			Name = "Caption",
+			Text = props.Caption,
+			Size = UDim2.new(1.3, 0, 0, captionHeight),
+			Position = UDim2.new(0.5, 0, 1, -math.floor(captionHeight * 0.35)),
+			AnchorPoint = Vector2.new(0.5, 0),
+			StrokeThickness = 2,
+			Parent = button,
+		})
+		caption.Active = false
+	end
+	button.MouseEnter:Connect(function()
+		Components.tween(scale, 0.08, { Scale = 1.06 })
+	end)
+	button.MouseLeave:Connect(function()
+		Components.tween(scale, 0.08, { Scale = 1 })
+	end)
+	button.MouseButton1Down:Connect(function()
+		Components.tween(scale, 0.05, { Scale = 0.92 })
+	end)
+	button.MouseButton1Up:Connect(function()
+		Components.tween(scale, 0.08, { Scale = 1.06 })
+	end)
+	if props.OnClick then
+		local onClick = props.OnClick
+		button.Activated:Connect(function()
+			onClick()
+		end)
+	end
+	if props.Parent then
+		button.Parent = props.Parent
+	end
+	return button
+end
+
 function Components.setButtonText(button: TextButton, text: string)
 	local label = button:FindFirstChild("Text")
 	if label and label:IsA("TextLabel") then
