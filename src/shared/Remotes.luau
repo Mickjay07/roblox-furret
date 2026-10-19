@@ -12,7 +12,8 @@ local Remotes = {
 		UpdateSetting = "UpdateSetting",
 		-- (packId, amount) -> { owned } buys packs into the pack inventory
 		BuyPack = "BuyPack",
-		-- (packId, amount) -> { cards = { OpenedCard }, levelsGained, treatsGained }
+		-- (packId, requestId) opens ONE owned pack -> { cards = { RevealCard }, levelsGained,
+		-- treatsGained }. Repeating a requestId returns the same result (no second pack).
 		OpenPack = "OpenPack",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",

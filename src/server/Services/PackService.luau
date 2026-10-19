@@ -1,7 +1,10 @@
 --!strict
--- BuyPack puts packs in the pack inventory; OpenPack opens owned packs with server-side rolls
--- (owner decision Q1). Randomness comes from the server's own Random.
+-- BuyPack puts packs in the pack inventory; OpenPack opens ONE owned pack with server-side
+-- rolls (owner decision Q1; A7 opening sequence). Randomness comes from the server's own
+-- Random. OpenPack is idempotent per client request id (Lib/PackOpenRequests), so repeated
+-- clicks or retries can never consume a second pack or grant a second reward.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -11,11 +14,13 @@ local PackShop = require(Shared.Logic.PackShop)
 local Validate = require(Shared.Util.Validate)
 
 local Net = require(script.Parent.Parent.Lib.Net)
+local PackOpenRequests = require(script.Parent.Parent.Lib.PackOpenRequests)
 local DataService = require(script.Parent.DataService)
 
 local PackService = {}
 
 local rng = Random.new()
+local requests = PackOpenRequests.new()
 
 local function packArgs(): { Validate.Checker }
 	return {
@@ -39,22 +44,23 @@ function PackService:Start()
 		return { ok = true, packId = packId, owned = PackShop.owned(data, packId) }
 	end)
 
-	Net.onInvoke(Remotes.Functions.OpenPack, packArgs(), function(player: Player, packId: string, amount: number)
+	local openArgs: { Validate.Checker } = { Validate.oneOf(Config.Packs.ById), Validate.id(64) }
+	Net.onInvoke(Remotes.Functions.OpenPack, openArgs, function(player: Player, packId: string, requestId: string)
 		local data = DataService:GetData(player)
 		if not data then
 			return { ok = false, error = "Data not loaded" }
 		end
-		local ok, result = PackShop.open(data, packId, amount, {
+		local response, opening = requests:open(data, player.UserId, packId, requestId, {
 			ownerId = player.UserId,
 			now = os.time(),
 			roll = function()
 				return rng:NextNumber()
 			end,
 		})
-		if not ok then
-			return { ok = false, error = result }
+		if not opening then
+			-- A failure (nothing changed) or a replay of an already-granted opening.
+			return response
 		end
-		local opening: PackShop.Opening = result
 		DataService:Patched(player, "Cards", opening.NewInstanceIds)
 		DataService:Patched(player, "Discovered", opening.DiscoveredIds)
 		DataService:Changed(player, "Packs")
@@ -68,13 +74,11 @@ function PackService:Start()
 				"success"
 			)
 		end
-		return {
-			ok = true,
-			packId = packId,
-			cards = opening.Cards,
-			levelsGained = opening.LevelsGained,
-			treatsGained = opening.TreatsGained,
-		}
+		return response
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		requests:forget(player.UserId)
 	end)
 end
 

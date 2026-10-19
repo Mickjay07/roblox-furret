@@ -1,7 +1,7 @@
 --!strict
--- Pack shop window and the card reveal overlay.
+-- Pack shop window. OPEN opens one pack and plays the A7 opening sequence (UI/PackReveal).
 
-local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -16,7 +16,7 @@ local Progression = require(Shared.Logic.Progression)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
-local CardTile = require(UI.CardTile)
+local PackReveal = require(UI.PackReveal)
 local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
@@ -28,107 +28,29 @@ local NotificationController = require(script.Parent.NotificationController)
 
 local PacksController = {}
 
-local revealGui: ScreenGui
+-- One pack opening at a time: set from the OPEN click until the reveal is closed.
+local opening = false
 
-local function showReveal(cards: { any })
-	revealGui.Enabled = true
-	local root = revealGui:FindFirstChild("Root") :: Frame
-	local grid = root:FindFirstChild("Grid") :: ScrollingFrame
-	for _, child in grid:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
-		end
+-- Opens ONE owned pack. The server consumes it and grants the cards before replying; the
+-- request id makes a repeated request (double click, retry) return the same result
+-- instead of opening another pack. The reveal is purely visual.
+local function openPack(pack: Types.PackDef)
+	if opening or PackReveal.isOpen() then
+		return
 	end
-	for i, card in cards do
-		local def = CardRegistry.get(card.CardId)
-		if def then
-			local holder = Create("Frame", {
-				Name = "Card" .. i,
-				BackgroundTransparency = 1,
-				LayoutOrder = i,
-				Parent = grid,
-			})
-			local tile = CardTile.new(def, {
-				Variant = card.Variant,
-				IsNew = card.IsNew,
-				Income = Economy.cardIncome({
-					CardId = card.CardId,
-					Variant = card.Variant,
-					Obtained = 0,
-					Favorite = false,
-				}),
-			})
-			tile.Size = UDim2.fromScale(1, 0.84)
-			tile.Parent = holder
-			Components.label({
-				Text = `1 IN {Format.commas(card.OneIn)}`,
-				Size = UDim2.fromScale(1, 0.13),
-				Position = UDim2.fromScale(0, 0.87),
-				Parent = holder,
-			})
-			local scale = Create("UIScale", { Scale = 0, Parent = holder })
-			task.delay(if Components.reducedMotion then 0 else (i - 1) * 0.12, function()
-				Components.tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
-			end)
-		end
+	local data = DataController:Get()
+	if not data or (data.Packs[pack.Id] or 0) < 1 then
+		return
 	end
-end
-
-local function buildReveal()
-	revealGui = Create("ScreenGui", {
-		Name = "Reveal",
-		ResetOnSpawn = false,
-		DisplayOrder = 15,
-		Enabled = false,
-		IgnoreGuiInset = true,
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
-	local backdrop: TextButton = Create("TextButton", {
-		Name = "Backdrop",
-		Text = "",
-		AutoButtonColor = false,
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.35,
-		Parent = revealGui,
-	})
-	local root = Create("Frame", {
-		Name = "Root",
-		Size = UDim2.fromOffset(1100, 640),
-		Position = UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent = revealGui,
-	})
-	Components.autoScale(root)
-	Create("ScrollingFrame", {
-		Name = "Grid",
-		Size = UDim2.new(1, 0, 1, -80),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 8,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		Parent = root,
-	}, {
-		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(190, 300),
-			CellPadding = UDim2.fromOffset(18, 18),
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-		Create("UIPadding", { PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12) }),
-	})
-	Components.label({
-		Text = "TAP TO CONTINUE",
-		Size = UDim2.new(1, 0, 0, 52),
-		Position = UDim2.new(0, 0, 1, -56),
-		StrokeThickness = 3,
-		Parent = root,
-	})
-	backdrop.Activated:Connect(function()
-		revealGui.Enabled = false
+	opening = true
+	local requestId = HttpService:GenerateGUID(false)
+	local result = Request(Remotes.Functions.OpenPack, pack.Id, requestId)
+	if not result.ok or type(result.cards) ~= "table" then
+		opening = false
+		return
+	end
+	PackReveal.play(pack, result.cards, function()
+		opening = false
 	end)
 end
 
@@ -227,15 +149,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
-			local data = DataController:Get()
-			local owned = if data then data.Packs[pack.Id] or 0 else 0
-			if owned < 1 then
-				return
-			end
-			local result = Request(Remotes.Functions.OpenPack, pack.Id, math.min(owned, amount))
-			if result.ok then
-				showReveal(result.cards)
-			end
+			openPack(pack)
 		end,
 	})
 	Components.button({
@@ -337,7 +251,6 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 end
 
 function PacksController:Start()
-	buildReveal()
 	Windows.register("Packs", {
 		Title = "Packs",
 		Accent = "Green",

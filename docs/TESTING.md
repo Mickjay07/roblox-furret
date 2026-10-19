@@ -265,13 +265,30 @@ for i = 1, 20 do local r = R.BuyPack:InvokeServer("burrow_pack", 1) if r.error =
       and `game.ReplicatedStorage.Remotes:FindFirstChild("DevCommand")` returns nil in the
       client console.
 
+### 1.13 Pack opening sequence (§7.5, roadmap A7)
+Use `packs pack1 5` in the DEV panel, then the Pack Shop's OPEN button.
+- [ ] OPEN consumes exactly **one** pack: the count on the button drops by 1.
+- [ ] Sequence: the world blurs, the pack front appears in the centre and shakes, then
+      bursts with a flash. Five cards follow one by one: card back, flip, then the art.
+- [ ] Each card shows its name, rarity (in rarity colour), income (`+70/S`, and `+71.4/S`
+      for a Shiny Sandy), `SHINY +2%` for a Shiny copy, `NEW!` and `1 IN N`.
+- [ ] Rarer cards get bigger effects. Uncommon: glow. Rare: glow and sparkles. Epic: also
+      rotating rays and an "EPIC!" banner. Legendary and Mythic: also a white flash, a
+      stage shake and a banner. Use `roll pack1 20` to see what to expect, or open several.
+- [ ] Tapping advances to the next card; cards also advance on their own after a few
+      seconds. SKIP jumps to the summary.
+- [ ] Summary: all five cards with name, rarity, income and the "+2%" tag on Shiny tiles.
+      CONTINUE closes it and removes the blur.
+- [ ] Clicking OPEN rapidly opens only one pack; OPEN does nothing while the sequence is
+      showing.
+- [ ] The five cards are in the backpack (and saved) even if you stop the test in the middle
+      of the sequence, then rejoin.
+- [ ] Reduced Motion on (Settings): the summary appears straight away.
+- [ ] Full backpack: OPEN shows an error toast and the pack is not consumed.
+
 ## Part 2: specification features (run when implemented)
 
-### 2.4 Pack opening sequence (§7.5, roadmap A7 remainder)
-- [ ] Opening a pack plays the sequence (pack, blur, open, flip, rarity effect), and the
-      card is already in the backpack before the reveal ends.
-- [ ] Skip-animations works after the first viewing. Multiple packs end on a results
-      screen.
+### 2.4 Pack shop extras (§7.3–7.4, roadmap A8)
 - [ ] Unaffordable packs are greyed out; a large purchase asks for confirmation.
 
 ### 2.5 Grader (§11, roadmap B1)

@@ -53,6 +53,18 @@ function Format.duration(seconds: number): string
 	return string.format("%d:%02d", m, s % 60)
 end
 
+-- Income per second: one decimal below 1,000 when it isn't whole (71.4), short form above.
+-- Truncated like Format.short, so a rate is never shown higher than it is.
+function Format.rate(n: number): string
+	if math.abs(n) < 1000 then
+		local tenths = math.floor(n * 10 + 1e-9) / 10
+		if tenths % 1 ~= 0 then
+			return string.format("%.1f", tenths)
+		end
+	end
+	return Format.short(n)
+end
+
 -- Income bonus over a base value as a tag: (71.4, 70) -> "+2%", (210, 70) -> "+200%".
 -- Nil when there is no visible difference.
 function Format.bonusPercent(value: number, base: number): string?

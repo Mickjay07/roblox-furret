@@ -3,6 +3,58 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: A7 pack opening sequence; owner decisions on Shiny sale, Q14, Q15
+
+**Owner decisions**
+- Shiny keeps a ×1.5 sale value (collector value) while earning +2%. No change needed.
+- Q14: the placeholder catalog stays in code but leaves the normal shop until it has art
+  and balanced prices (to implement in A8; no prices change).
+- Q15: the game is called **"Ferret Frenzy: Card Tycoon"** (UI and docs to follow).
+
+**Server: one pack per request, no double rewards**
+- `OpenPack(packId, requestId)` now opens exactly ONE owned pack. It used to take an
+  amount; the shop's quantity selector now only affects buying.
+- New pure `server/Lib/PackOpenRequests`:
+  - The first request with an id consumes one pack and rolls five cards (through the
+    unchanged `PackShop.open`).
+  - A repeated id (double click, retry) gets the remembered result back with no second
+    pack and no second reward.
+  - Failures are not remembered (nothing changed). The last 16 results are kept per
+    player, and a player's entries are dropped on leave.
+- The response includes each card's income from `Economy.cardIncome`.
+- Inventory, saving, income and sell prices are unchanged.
+
+**Client: `UI/PackReveal`** (replaces the instant grid in `PacksController`)
+- **Opening:** blur and dim, then the pack front in the centre shakes. The rarer the best
+  card inside, the longer and harder it shakes. Then a flash and a burst.
+- **Cards one by one:** card back, flip, then the art. Name, rarity colour, income
+  (`Format.rate`: `+71.4/S`), `SHINY +2%`, `NEW!`, `1 IN N`.
+- **Effects scale with rarity** (`Logic/RevealStyle`, tested):
+  - Uncommon: glow.
+  - Rare: also sparkles.
+  - Epic: also rotating rays and a banner.
+  - Legendary and above: also a flash, a shake and a banner.
+- **Controls:** tap advances (or auto-advance), SKIP jumps to the summary, and the summary
+  of all five cards has CONTINUE.
+- **Safety:** one opening at a time, with the OPEN lock released only when the reveal
+  closes. Sessions cancel stale animation steps. Closing destroys the blur. Reduced Motion
+  goes straight to the summary.
+- No sound: no audio asset ids exist, and none were invented.
+
+**Tests:** new `tests/unit/PackOpening.spec.luau` (16 tests):
+- one request consumes exactly one pack and adds exactly five cards, with
+  server-computed incomes;
+- a repeated id replays the result with no second pack; a new id opens the next one;
+  ids are per player;
+- no packs, a full backpack or an unknown pack is rejected with nothing changed, and
+  failures are not remembered;
+- memory limit and forget-on-leave;
+- every pack has five cards;
+- RevealStyle escalates with rarity; the Shiny label is "SHINY +2%"; `Format.rate`.
+
+`VerifyPlace` also checks the 3 new modules. `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`:
+all checks passed, 216 tests. **Not run in Studio:** see TESTING.md §1.13.
+
 ## 2026-10-19: Shiny earns +2% (owner decision)
 
 - `Config/Variants`: Shiny income multiplier changed from 1.5 to **1.02**: a Shiny copy earns
