@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Types = require(Shared.Types)
+local CardArt = require(Shared.Logic.CardArt)
 local Format = require(Shared.Util.Format)
 
 local Components = require(script.Parent.Components)
@@ -57,11 +58,81 @@ local function tag(parent: Instance, text: string, color: Color3, position: UDim
 	label.ZIndex = 4
 end
 
--- Builds a card tile. Size is set by the caller's layout (aspect ratio 5:7 is enforced).
+-- Tile for cards whose uploaded artwork is a complete printed card (Config.Assets.FullCardArt):
+-- the image is shown as-is (aspect preserved) with status tags on top. The printed income is
+-- the base income, so an effective-income tag appears when a variant or grade changes it.
+local function fullArtTile(def: Types.CardDef, image: string, opts: Options, variant: Types.VariantDef): TextButton
+	local tile: TextButton = Create("TextButton", {
+		Name = def.Id,
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(150, 225),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.LayoutOrder or 0,
+	}, {
+		Create("UIAspectRatioConstraint", { AspectRatio = CardArt.aspect(def.Artwork) }),
+		Create("ImageLabel", {
+			Name = "Art",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Image = image,
+			ScaleType = Enum.ScaleType.Fit,
+		}),
+	})
+	if opts.Selected then
+		Create("Frame", {
+			Name = "Selection",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Parent = tile,
+		}, {
+			Components.corner(UDim.new(0, 12)),
+			Create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 5 }),
+		})
+	end
+	if variant.Id ~= "Normal" then
+		tag(tile, variant.DisplayName, variant.Color, UDim2.new(0.5, 0, 0.14, 0), Vector2.new(0.5, 0))
+	end
+	if opts.IsNew then
+		tag(tile, "NEW!", Color3.fromRGB(255, 70, 90), UDim2.new(0.03, 0, 0.14, 0), Vector2.zero)
+	end
+	if opts.Favorite then
+		tag(tile, "FAV", Color3.fromRGB(255, 200, 40), UDim2.new(0.97, 0, 0.14, 0), Vector2.new(1, 0))
+	end
+	if opts.OnStand then
+		tag(tile, "ON STAND", Color3.fromRGB(64, 156, 255), UDim2.new(0.5, 0, 0.42, 0), Vector2.new(0.5, 0))
+	end
+	if opts.Count and opts.Count > 1 then
+		tag(tile, `x{opts.Count}`, Theme.Colors.Panel, UDim2.new(0.97, 0, 0.3, 0), Vector2.new(1, 0))
+	end
+	if opts.Income and math.abs(opts.Income - def.BaseIncome) > 1e-6 then
+		tag(
+			tile,
+			`+{Format.short(opts.Income)}/S`,
+			Theme.Colors.Cash:Lerp(Color3.new(0, 0, 0), 0.35),
+			UDim2.new(0.5, 0, 0.7, 0),
+			Vector2.new(0.5, 0)
+		)
+	end
+	if opts.OnClick then
+		local onClick = opts.OnClick
+		tile.Activated:Connect(function()
+			onClick()
+		end)
+	end
+	return tile
+end
+
+-- Builds a card tile. Size is set by the caller's layout (aspect ratio 5:7 is enforced, or the
+-- artwork's own aspect when uploaded art is shown).
 function CardTile.new(def: Types.CardDef, options: Options?): GuiButton
 	local opts: Options = options or {}
 	local rarity = Config.Rarities.ById[def.Rarity]
 	local variant = Config.Variants.ById[opts.Variant or "Normal"] or Config.Variants.ById.Normal
+	local uploaded = CardArt.forCard(def)
+	if uploaded and Config.Assets.FullCardArt then
+		return fullArtTile(def, uploaded, opts, variant)
+	end
 	local rarityColor = if rarity then rarity.Color else Theme.Colors.Muted
 
 	local tile: TextButton = Create("TextButton", {
@@ -93,11 +164,11 @@ function CardTile.new(def: Types.CardDef, options: Options?): GuiButton
 		ClipsDescendants = true,
 		Parent = tile,
 	}, { Components.corner(UDim.new(0, 8)), Components.stroke(Theme.Colors.Border, 2) })
-	if def.Artwork ~= "" then
+	if uploaded then
 		Create("ImageLabel", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
-			Image = def.Artwork,
+			Image = uploaded,
 			ScaleType = Enum.ScaleType.Crop,
 			Parent = art,
 		})

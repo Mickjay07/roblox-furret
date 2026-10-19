@@ -32,6 +32,9 @@ local DataService = {}
 DataService.ProfileLoaded = Signal.new() :: Signal.Signal<Player, Types.PlayerData>
 -- Fires just before a profile is saved for the last time (player leaving or shutdown).
 DataService.ProfileReleasing = Signal.new() :: Signal.Signal<Player, Types.PlayerData>
+-- Fires after a top-level field was replicated (Changed or Patched), so world state such as
+-- physical stands can follow the data without polling.
+DataService.KeyChanged = Signal.new() :: Signal.Signal<Player, string>
 
 local sessions: SessionStore.SessionStore
 local profiles: { [Player]: SessionStore.Profile } = {}
@@ -203,6 +206,7 @@ function DataService:Changed(player: Player, key: string)
 	if key == "Currency" then
 		updateLeaderstats(player, data)
 	end
+	DataService.KeyChanged:Fire(player, key)
 end
 
 -- Replicates changed entries of a map field (Cards, Discovered, ...) without resending it all.
@@ -222,6 +226,28 @@ function DataService:Patched(player: Player, key: string, changedKeys: { string 
 		end
 	end
 	Net.fire(player, Remotes.Events.DataPatched, key, set, remove)
+	DataService.KeyChanged:Fire(player, key)
+end
+
+-- Saves a loaded player's profile now (developer tools). Returns false if not loaded or the
+-- save failed.
+function DataService:SaveNow(player: Player): boolean
+	local profile = profiles[player]
+	return profile ~= nil and profile.Active and sessions:save(profile)
+end
+
+-- Diagnostics for developer tools.
+function DataService:Diagnostics(player: Player): { [string]: any }
+	local profile = profiles[player]
+	return {
+		Loaded = profile ~= nil and profile.Active,
+		Key = keyFor(player),
+		IsNew = profile ~= nil and profile.IsNew,
+		LoadedAt = if profile then profile.LoadedAt else 0,
+		MockStore = usingMockStore,
+		PendingSaves = sessions:pendingCount(),
+		AutosaveInterval = DataSettings.AutosaveInterval,
+	}
 end
 
 function DataService:Notify(player: Player, message: string, kind: string?)

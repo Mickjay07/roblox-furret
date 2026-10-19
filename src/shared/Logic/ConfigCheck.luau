@@ -64,6 +64,29 @@ function ConfigCheck.run(config: any?): { string }
 		end
 	end
 
+	-- Artwork keys must exist in Config.Assets (or be "" / a raw content id), and asset ids
+	-- must be non-negative integers (0 = not uploaded yet).
+	if Config.Assets then
+		local function artworkOk(key: string): boolean
+			return key == "" or string.match(key, "^rbxassetid://%d+$") ~= nil or Config.Assets.Images[key] ~= nil
+		end
+		for _, card in Config.Cards.List do
+			if not artworkOk(card.Artwork) then
+				problem(`card {card.Id}: unknown artwork key {card.Artwork}`)
+			end
+		end
+		for _, pack in Config.Packs.List do
+			if not artworkOk(pack.Artwork) then
+				problem(`pack {pack.Id}: unknown artwork key {pack.Artwork}`)
+			end
+		end
+		for key, asset in Config.Assets.Images do
+			if type(asset.AssetId) ~= "number" or asset.AssetId < 0 or asset.AssetId % 1 ~= 0 then
+				problem(`asset {key}: AssetId must be a non-negative integer`)
+			end
+		end
+	end
+
 	for _, pack in Config.Packs.List do
 		local where = `pack {pack.Id}`
 		if pack.Price <= 0 or pack.CardsPerOpen < 1 then
@@ -123,6 +146,14 @@ function ConfigCheck.run(config: any?): { string }
 		end
 		if not Config.Economy.Currencies[upgrade.Currency] then
 			problem(`upgrade {upgrade.Id}: unknown currency {upgrade.Currency}`)
+		end
+	end
+
+	if Config.Visuals then
+		for _, rarity in Config.Rarities.List do
+			if not Config.Visuals.RarityEffects[rarity.Id] then
+				problem(`visuals: no RarityEffects entry for {rarity.Id}`)
+			end
 		end
 	end
 

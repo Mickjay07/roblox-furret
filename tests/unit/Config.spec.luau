@@ -31,10 +31,17 @@ describe("Config", function()
 		end
 	end)
 
-	it("orders packs by price so progression goes up", function()
-		local list = Config.Packs.List
-		for i = 2, #list do
-			expect(list[i].Price).toBeGreaterThan(list[i - 1].Price)
+	it("never lets a pack be bought and resold at a profit (expected sale value < price)", function()
+		local PackRoller = Loader.require("src/shared/Logic/PackRoller")
+		for _, pack in Config.Packs.List do
+			local expected = 0
+			for cardId, probability in PackRoller.odds(pack) do
+				expected += probability * CardRegistry.get(cardId).BaseSaleValue
+			end
+			expected *= pack.CardsPerOpen
+			if expected >= pack.Price then
+				error(`{pack.Id}: expected resale {expected} >= price {pack.Price}`)
+			end
 		end
 	end)
 

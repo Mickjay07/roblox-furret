@@ -16,7 +16,7 @@ return table.freeze({
 	-- Spec §3.3: starter currency and starter card packs, granted exactly once (guarded by
 	-- Flags.StarterGranted). Packs go to the pack inventory; the player opens them.
 	-- The count is an interim value (the spec does not give one).
-	StarterPacks = table.freeze({ burrow_pack = 3 } :: { [string]: number }),
+	StarterPacks = table.freeze({ pack1 = 3 } :: { [string]: number }),
 
 	IncomeTickSeconds = 1,
 

@@ -33,6 +33,9 @@ local SORTS: { { key: string, label: string } } = {
 
 local sortKey = "Recent"
 local selectedId: string? = nil
+-- Set when the backpack was opened from a physical stand: the main action places the selected
+-- card on that stand (through the validated PlaceCard remote).
+local targetSlot: number? = nil
 
 local function rarityOrder(def: Types.CardDef): number
 	local rarity = Config.Rarities.ById[def.Rarity]
@@ -130,14 +133,21 @@ local function renderDetail(data: Types.PlayerData)
 		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
 	})
 	local size = UDim2.new(1, 0, 0, 46)
+	local slot = targetSlot
 	Components.button({
-		Text = if onStand then "REMOVE FROM STAND" else "PLACE ON STAND",
-		Style = "Blue",
+		Text = if slot then `PLACE ON STAND #{slot}` elseif onStand then "REMOVE FROM STAND" else "PLACE ON STAND",
+		Style = if slot then "Green" else "Blue",
 		Size = size,
 		LayoutOrder = 1,
 		Parent = actions,
 		OnClick = function()
-			if onStand then
+			if slot then
+				local result = Request(Remotes.Functions.PlaceCard, id, slot)
+				if result.ok then
+					targetSlot = nil
+					Windows.close()
+				end
+			elseif onStand then
 				Request(Remotes.Functions.RemoveCard, id)
 			else
 				Request(Remotes.Functions.PlaceCard, id, 0)
@@ -180,7 +190,9 @@ local function render()
 	end
 	clear(grid)
 	local entries = sortedEntries(data)
-	capacityLabel.Text = `{#entries}/{Economy.backpackCapacity(data)}`
+	capacityLabel.Text = if targetSlot
+		then `PICK FOR STAND #{targetSlot}`
+		else `{#entries}/{Economy.backpackCapacity(data)}`
 	if #entries == 0 then
 		Components.label({
 			Text = "NO CARDS YET - BUY A PACK!",
@@ -278,6 +290,9 @@ function BackpackController:Start()
 			}, { Components.corner(UDim.new(0, 12)) })
 			return render
 		end,
+		OnClose = function()
+			targetSlot = nil
+		end,
 	})
 
 	-- Re-render while open when cards or stands change.
@@ -293,7 +308,20 @@ end
 -- Opens the backpack with a card pre-selected (used by the stands window).
 function BackpackController:OpenWith(instanceId: string?)
 	selectedId = instanceId
+	targetSlot = nil
 	Windows.open("Backpack")
+end
+
+-- Opens the backpack to choose a card for a physical stand (used by stand prompts).
+function BackpackController:OpenForStand(slot: number)
+	local data = DataController:Get()
+	selectedId = if data then data.Display[tostring(slot)] else nil
+	targetSlot = slot
+	Windows.open("Backpack")
+end
+
+function BackpackController:TargetSlot(): number?
+	return targetSlot
 end
 
 return BackpackController

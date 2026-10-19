@@ -16,6 +16,8 @@ local Remotes = {
 		OpenPack = "OpenPack",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",
+		-- () moves your character to your own plot
+		TeleportHome = "TeleportHome",
 		-- (instanceIds) -> { earned }
 		SellCards = "SellCards",
 		-- (instanceId, favorite)
@@ -28,6 +30,11 @@ local Remotes = {
 		PlaceBest = "PlaceBest",
 		-- (upgradeId) -> { level }
 		BuyUpgrade = "BuyUpgrade",
+	},
+	-- Created only in Roblox Studio by DevService (never on live servers).
+	DevFunctions = {
+		-- (commandLine: string) -> { ok, message }
+		DevCommand = "DevCommand",
 	},
 	Events = {
 		-- (key: string, value: any) replaces a whole top-level PlayerData field.

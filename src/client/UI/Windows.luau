@@ -15,6 +15,8 @@ export type WindowSpec = {
 	Size: Vector2?,
 	-- Builds the content once; may return an onOpen callback run each time it opens.
 	Build: (content: Frame) -> (() -> ())?,
+	-- Called whenever the window closes.
+	OnClose: (() -> ())?,
 }
 
 type Window = { frame: Frame, scale: UIScale, onOpen: (() -> ())? }
@@ -121,11 +123,16 @@ end
 
 function Windows.close()
 	if current then
-		local window = built[current]
+		local name = current
+		local window = built[name]
 		if window then
 			window.frame.Visible = false
 		end
 		current = nil
+		local spec = specs[name]
+		if spec and spec.OnClose then
+			spec.OnClose()
+		end
 	end
 end
 

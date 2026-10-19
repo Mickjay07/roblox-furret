@@ -21,6 +21,82 @@ local Species = table.freeze({
 })
 
 local list: { Types.CardDef } = {
+	-- Pack 1 -------------------------------------------------------------------------
+	-- Real artwork (Config.Assets). Name, rarity, printed income, subtitle and number come
+	-- from the card art itself; keep them in sync with the images. Sale values are not
+	-- printed on the cards (2x income: see the Pack 1 notes in docs/STATUS.md).
+	{
+		Id = "pack1_sandy",
+		Name = "Sandy",
+		Description = "Sandcastle Ferret",
+		Species = "Sable",
+		Rarity = "Uncommon",
+		BaseIncome = 70,
+		BaseSaleValue = 140,
+		Artwork = "card.pack1.sandy",
+		Collection = "Pack1",
+		CollectionNumber = 1,
+	},
+	{
+		Id = "pack1_boba",
+		Name = "Boba",
+		Description = "Bubble Tea Ferret",
+		Species = "Sable",
+		Rarity = "Rare",
+		BaseIncome = 118,
+		BaseSaleValue = 236,
+		Artwork = "card.pack1.boba",
+		Collection = "Pack1",
+		CollectionNumber = 2,
+	},
+	{
+		Id = "pack1_sky",
+		Name = "Sky",
+		Description = "Sunset Explorer",
+		Species = "Sable",
+		Rarity = "Epic",
+		BaseIncome = 420,
+		BaseSaleValue = 840,
+		Artwork = "card.pack1.sky",
+		Collection = "Pack1",
+		CollectionNumber = 3,
+	},
+	{
+		Id = "pack1_kingston",
+		Name = "Kingston",
+		Description = "Royal Ferret",
+		Species = "Sable",
+		Rarity = "Legendary",
+		BaseIncome = 750,
+		BaseSaleValue = 1500,
+		Artwork = "card.pack1.kingston",
+		Collection = "Pack1",
+		CollectionNumber = 4,
+	},
+	{
+		Id = "pack1_aurora",
+		Name = "Aurora",
+		Description = "Northern Ferret",
+		Species = "Sable",
+		Rarity = "Mythic",
+		BaseIncome = 1200,
+		BaseSaleValue = 2400,
+		Artwork = "card.pack1.aurora",
+		Collection = "Pack1",
+		CollectionNumber = 5,
+	},
+	{
+		Id = "pack1_frost",
+		Name = "Frost",
+		Description = "Glacial Ferret",
+		Species = "Sable",
+		Rarity = "Mythic",
+		BaseIncome = 1500,
+		BaseSaleValue = 3000,
+		Artwork = "card.pack1.frost",
+		Collection = "Pack1",
+		CollectionNumber = 6,
+	},
 	-- Burrow ---------------------------------------------------------------
 	{
 		Id = "burrow_sable_scout",

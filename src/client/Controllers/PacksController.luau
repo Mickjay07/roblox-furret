@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
+local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
 local PackRoller = require(Shared.Logic.PackRoller)
@@ -141,9 +142,22 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		Parent = list,
 	}, { Components.corner(UDim.new(0, 14)), Components.stroke(Theme.Colors.Border, 2) })
 
-	local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(84, 104))
-	icon.Position = UDim2.fromOffset(10, 10)
-	icon.Parent = row
+	local packArt = CardArt.forPack(pack)
+	if packArt then
+		Create("ImageLabel", {
+			Name = "PackArt",
+			Size = UDim2.fromOffset(70, 105),
+			Position = UDim2.fromOffset(16, 9),
+			BackgroundTransparency = 1,
+			Image = packArt,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = row,
+		})
+	else
+		local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(84, 104))
+		icon.Position = UDim2.fromOffset(10, 10)
+		icon.Parent = row
+	end
 
 	Components.label({
 		Text = string.upper(pack.DisplayName),

@@ -13,4 +13,7 @@ return {
 	Grading = require(script.Grading),
 	Upgrades = require(script.Upgrades),
 	Monetization = require(script.Monetization),
+	Assets = require(script.Assets),
+	World = require(script.World),
+	Visuals = require(script.Visuals),
 }

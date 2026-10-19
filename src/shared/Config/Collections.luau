@@ -13,6 +13,8 @@ local function collection(id: string, name: string, order: number, color: Color3
 end
 
 local list: { Types.CollectionDef } = {
+	-- Pack 1: the first real artwork set (assets/source/Pack 1), cards #001-#006.
+	collection("Pack1", "Pack 1", 0, Color3.fromRGB(70, 170, 255), 0.05),
 	collection("Burrow", "Backyard Burrow", 1, Color3.fromRGB(196, 140, 90), 0.05),
 	collection("Snack", "Snack Attack", 2, Color3.fromRGB(255, 150, 90), 0.05),
 	collection("Knight", "Knight Patrol", 3, Color3.fromRGB(120, 150, 210), 0.08),

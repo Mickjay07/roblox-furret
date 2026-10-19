@@ -69,6 +69,23 @@ local function limiterFor(name: string): RateLimiter.RateLimiter
 	return limiter
 end
 
+-- Creates a RemoteFunction that is NOT in Remotes.Functions (created only on demand, e.g.
+-- Studio-only developer tools that must not exist on live servers).
+function Net.createOptionalFunction(name: string)
+	Net.init()
+	assert(folder, "Net not initialised")
+	if functions[name] then
+		return
+	end
+	local remote = Instance.new("RemoteFunction")
+	remote.Name = name
+	remote.OnServerInvoke = function()
+		return fail("not available")
+	end
+	remote.Parent = folder
+	functions[name] = remote
+end
+
 -- Registers the handler for a RemoteFunction declared in Remotes.Functions.
 function Net.onInvoke(name: string, checkers: { Validate.Checker }, handler: (Player, ...any) -> Result)
 	Net.init()

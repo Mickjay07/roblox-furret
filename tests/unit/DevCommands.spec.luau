@@ -1,0 +1,135 @@
+local TestKit = require("../TestKit")
+local Loader = require("../Loader")
+local describe, it, expect = TestKit.describe, TestKit.it, TestKit.expect
+
+local Config = Loader.require("src/shared/Config")
+local ProfileSchema = Loader.require("src/shared/Data/ProfileSchema")
+local Inventory = Loader.require("src/shared/Logic/Inventory")
+local DevCommands = Loader.require("src/server/Lib/DevCommands")
+
+local function ctx()
+	return { data = ProfileSchema.defaults(), ownerId = 5, now = 1700000000 }
+end
+
+local function run(c, line)
+	local name, args = DevCommands.parse(line)
+	assert(name, args)
+	return DevCommands.run(c, name, args :: any)
+end
+
+local function has(text: string, needle: string): boolean
+	return string.find(text, needle, 1, true) ~= nil
+end
+
+describe("DevCommands.parse", function()
+	it("splits a command line and lowercases the name", function()
+		local name, args = DevCommands.parse("/Cash 1000")
+		expect(name).toBe("cash")
+		expect(args).toEqual({ "1000" })
+	end)
+
+	it("rejects non-strings, empty, overlong, odd characters and too many args", function()
+		expect((DevCommands.parse(nil))).toBeNil()
+		expect((DevCommands.parse(""))).toBeNil()
+		expect((DevCommands.parse("   "))).toBeNil()
+		expect((DevCommands.parse(string.rep("a", 201)))).toBeNil()
+		expect((DevCommands.parse("cash 1;print(1)"))).toBeNil()
+		expect((DevCommands.parse("cash game.Players"))).toBe("cash") -- dots allowed, but only as data
+		expect((DevCommands.parse("a 1 2 3 4 5 6 7"))).toBeNil()
+	end)
+end)
+
+describe("DevCommands.run", function()
+	it("never executes unknown commands", function()
+		local c = ctx()
+		local ok, message = run(c, "loadstring x")
+		expect(ok).toBe(false)
+		expect(has(message, "unknown command")).toBe(true)
+	end)
+
+	it("adds and sets cash with range checks", function()
+		local c = ctx()
+		local ok, _, changed = run(c, "cash 1000")
+		expect(ok).toBe(true)
+		expect(c.data.Currency.Cash).toBe(1000)
+		expect(changed).toEqual({ "Currency" })
+		expect((run(c, "cash -5"))).toBe(false)
+		expect((run(c, "cash 1.5"))).toBe(false)
+		expect((run(c, "cash 1e16"))).toBe(false)
+		expect((run(c, "cash nan"))).toBe(false)
+		expect((run(c, "setcash 7"))).toBe(true)
+		expect(c.data.Currency.Cash).toBe(7)
+	end)
+
+	it("grants packs and test cards through the normal rules", function()
+		local c = ctx()
+		expect((run(c, "packs pack1 3"))).toBe(true)
+		expect(c.data.Packs.pack1).toBe(3)
+		expect((run(c, "packs nope 1"))).toBe(false)
+		expect((run(c, "packs pack1 1000"))).toBe(false)
+		expect((run(c, "card pack1_sandy Gold 2"))).toBe(true)
+		expect(Inventory.count(c.data)).toBe(2)
+		expect(c.data.Discovered.pack1_sandy.Variants.Gold).toBe(true)
+		expect((run(c, "card pack1_sandy Plaid"))).toBe(false)
+		expect((run(c, "card nope"))).toBe(false)
+	end)
+
+	it("creates every card with allcards", function()
+		local c = ctx()
+		expect((run(c, "allcards"))).toBe(true)
+		expect(Inventory.count(c.data)).toBe(#Config.Cards.List)
+	end)
+
+	it("fast-forwards stand earnings and simulates capped offline time", function()
+		local c = ctx()
+		c.data.Display["1"] = Inventory.add(c.data, 5, "pack1_sandy", "Normal", 0)
+		local ok, message = run(c, "accrue 10")
+		expect(ok).toBe(true)
+		expect(c.data.Income.Pending["1"]).toBe(700)
+		expect(has(message, "700")).toBe(true)
+		local _, offlineMessage = run(c, "offline 999999")
+		expect(has(offlineMessage, "counted 2:00:00")).toBe(true)
+		expect(c.data.Income.LastOnline).toBe(c.now)
+	end)
+
+	it("rolls pack distributions without granting anything", function()
+		local c = ctx()
+		local ok, message = run(c, "roll pack1 2000")
+		expect(ok).toBe(true)
+		expect(Inventory.count(c.data)).toBe(0)
+		expect(has(message, "Uncommon")).toBe(true)
+		expect(has(message, "expected")).toBe(true)
+		expect((run(c, "roll pack1 999999"))).toBe(false)
+	end)
+
+	it("reports stands, income and data diagnostics", function()
+		local c = ctx()
+		c.data.Display["2"] = Inventory.add(c.data, 5, "pack1_boba", "Normal", 0)
+		local _, stands = run(c, "stands")
+		expect(has(stands, "#2: pack1_boba")).toBe(true)
+		expect(has(stands, "#1: empty")).toBe(true)
+		local _, income = run(c, "income")
+		expect(has(income, "118/s")).toBe(true)
+		local _, data = run(c, "data")
+		expect(has(data, "schema v1")).toBe(true)
+	end)
+
+	it("resets the profile to defaults in place", function()
+		local c = ctx()
+		run(c, "cash 50")
+		local before = c.data
+		local ok, _, changed = run(c, "reset")
+		expect(ok).toBe(true)
+		expect(c.data == before).toBe(true)
+		expect(c.data.Currency.Cash).toBe(0)
+		expect(c.data.Flags.StarterGranted).toBe(false)
+		expect(table.find(changed, "Currency") ~= nil).toBe(true)
+	end)
+
+	it("lists every command in help", function()
+		local _, text = run(ctx(), "help")
+		for name in DevCommands.COMMANDS do
+			expect(has(text, name)).toBe(true)
+		end
+	end)
+end)

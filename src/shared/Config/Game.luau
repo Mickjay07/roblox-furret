@@ -35,6 +35,8 @@ return table.freeze({
 		PlaceCard = table.freeze({ Rate = 6, Burst = 12 }),
 		RemoveCard = table.freeze({ Rate = 6, Burst = 12 }),
 		PlaceBest = table.freeze({ Rate = 1, Burst = 3 }),
+		TeleportHome = table.freeze({ Rate = 0.5, Burst = 2 }),
+		DevCommand = table.freeze({ Rate = 5, Burst = 10 }),
 		SetFavorite = table.freeze({ Rate = 6, Burst = 12 }),
 		BuyUpgrade = table.freeze({ Rate = 3, Burst = 6 }),
 	}),
@@ -43,6 +45,12 @@ return table.freeze({
 		MaxPacksPerPurchase = 10,
 		MaxCardsPerSell = 50,
 		MaxIdLength = 64,
+	}),
+
+	-- Developer tools (roadmap A1). They only ever exist inside Roblox Studio
+	-- (RunService:IsStudio()); this flag can additionally switch them off in Studio.
+	Dev = table.freeze({
+		EnabledInStudio = true,
 	}),
 
 	Display = table.freeze({

@@ -29,6 +29,7 @@ local HUDController = {}
 local TOP_NAV = {
 	{ window = "Packs", text = "PACKS", style = "Green" },
 	{ window = "Display", text = "MY STANDS", style = "Blue" },
+	{ window = "__home", text = "MY PLOT", style = "Orange" },
 }
 local RIGHT_NAV = {
 	{ window = "Backpack", text = "BAG", style = "Orange" },
@@ -38,6 +39,10 @@ local RIGHT_NAV = {
 }
 
 local function navigate(window: string)
+	if window == "__home" then
+		Request(Remotes.Functions.TeleportHome)
+		return
+	end
 	if Windows.has(window) then
 		Windows.toggle(window)
 	else
@@ -174,7 +179,7 @@ end
 local function buildTopNav(gui: ScreenGui)
 	local bar = Create("Frame", {
 		Name = "TopNav",
-		Size = UDim2.fromOffset(420, 64),
+		Size = UDim2.fromOffset(640, 64),
 		Position = UDim2.new(0.5, 0, 0, 8),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
