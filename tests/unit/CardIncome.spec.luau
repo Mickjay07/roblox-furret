@@ -13,6 +13,7 @@ local Inventory = Loader.require("src/shared/Logic/Inventory")
 local Economy = Loader.require("src/shared/Logic/Economy")
 local IncomeLedger = Loader.require("src/shared/Logic/IncomeLedger")
 local PlotView = Loader.require("src/shared/Logic/PlotView")
+local Format = Loader.require("src/shared/Util/Format")
 
 -- Read from the artwork (assets/source/Pack 1): the "+N/s" printed on each Normal card.
 local PRINTED = {
@@ -64,29 +65,30 @@ end)
 describe("Variant income is applied once", function()
 	it("multiplies the printed (Normal) income by the variant multiplier exactly once", function()
 		local shiny = Config.Variants.ById.Shiny.IncomeMultiplier
-		expect(shiny).toBe(1.5)
+		-- Owner decision: Shiny earns 2% more than the Normal card.
+		expect(shiny).toBe(1.02)
 		for cardId, printed in PRINTED do
 			expect(Economy.cardIncome(instance(cardId, "Shiny"))).toBe(printed * shiny)
 			for _, variant in Config.Variants.List do
 				expect(Economy.cardIncome(instance(cardId, variant.Id))).toBe(printed * variant.IncomeMultiplier)
 			end
 		end
-		-- Sandy Shiny earns 105/s, not 70 x 1.5 x 1.5 = 157.5/s.
-		expect(Economy.cardIncome(instance("pack1_sandy", "Shiny"))).toBe(105)
+		-- Sandy Shiny earns 71.4/s (+2%), not 70 x 1.02 x 1.02 = 72.828/s.
+		expect(Economy.cardIncome(instance("pack1_sandy", "Shiny"))).toBeNear(71.4, 1e-9)
 	end)
 
-	it("accrues a Shiny stand at printed x 1.5 per second, with no second multiplier", function()
+	it("accrues a Shiny stand at printed + 2% per second, with no second multiplier", function()
 		local data = ProfileSchema.defaults()
 		data.Display["1"] = Inventory.add(data, 1, "pack1_boba", "Shiny", 0)
-		expect(IncomeLedger.standIncome(data, "1")).toBe(177)
+		expect(IncomeLedger.standIncome(data, "1")).toBeNear(120.36, 1e-9)
 		IncomeLedger.accrue(data, 10)
-		expect(IncomeLedger.pending(data, "1")).toBe(1770)
-		expect(Economy.totalIncome(data)).toBe(177)
+		expect(IncomeLedger.pending(data, "1")).toBeNear(1203.6, 1e-9)
+		expect(Economy.totalIncome(data)).toBeNear(120.36, 1e-9)
 	end)
 
 	it("applies grade on top of the variant, once each", function()
 		local grade10 = Config.Grading.Multipliers[10]
-		expect(Economy.cardIncome(instance("pack1_sky", "Shiny", 10))).toBeNear(420 * 1.5 * grade10, 1e-9)
+		expect(Economy.cardIncome(instance("pack1_sky", "Shiny", 10))).toBeNear(420 * 1.02 * grade10, 1e-9)
 	end)
 
 	it("publishes the same card income on the physical stands", function()
@@ -97,10 +99,28 @@ describe("Variant income is applied once", function()
 			expect(state.CardId).toBe(cardId)
 			expect(state.CardIncome).toBe(Economy.cardIncome(data.Cards[data.Display[tostring(slot)]]))
 		end
-		expect(states[1].CardIncome).toBe(105)
+		expect(states[1].CardIncome).toBeNear(71.4, 1e-9)
 		expect(states[2].CardIncome).toBe(118)
 		expect(states[6].CardIncome).toBe(1500 * Config.Variants.ById.Gold.IncomeMultiplier)
 		expect(states[7].CardIncome).toBeNil()
+	end)
+end)
+
+describe("Variant bonus tag", function()
+	it("shows Shiny as +2% above the printed income on every Pack 1 card", function()
+		for cardId, printed in PRINTED do
+			local income = Economy.cardIncome(instance(cardId, "Shiny"))
+			expect(Format.bonusPercent(income, printed)).toBe("+2%")
+			expect(Format.bonusPercent(Economy.cardIncome(instance(cardId)), printed)).toBeNil()
+		end
+	end)
+
+	it("formats other bonuses and keeps Shiny's sale value multiplier", function()
+		expect(Format.bonusPercent(70 * 3, 70)).toBe("+200%")
+		expect(Format.bonusPercent(70 * 1.025, 70)).toBe("+2.5%")
+		expect(Format.bonusPercent(70, 70)).toBeNil()
+		expect(Format.bonusPercent(5, 0)).toBeNil()
+		expect(Config.Variants.ById.Shiny.SaleMultiplier).toBe(1.5)
 	end)
 end)
 
@@ -126,7 +146,7 @@ describe("Total CASH/S", function()
 			standSum += IncomeLedger.standIncome(data, tostring(slot))
 		end
 		expect(Economy.totalIncome(data)).toBeNear(standSum, 1e-9)
-		local cardSum = 105 + 118 + 420 * Config.Variants.ById.Holo.IncomeMultiplier + 750 + 1200 + 1500
+		local cardSum = 70 * 1.02 + 118 + 420 * Config.Variants.ById.Holo.IncomeMultiplier + 750 + 1200 + 1500
 		local multiplier = 1 + 0.3 + Config.Collections.ById.Pack1.CompletionIncomeBonus
 		expect(Economy.totalIncome(data)).toBeNear(cardSum * multiplier, 1e-9)
 	end)
@@ -179,6 +199,6 @@ describe("Stand earnings and Collect All", function()
 		data.Display["1"] = Inventory.add(data, 1, "pack1_sandy", "Shiny", 0)
 		local cap = Config.Economy.Income.StandCapSeconds
 		IncomeLedger.accrue(data, cap * 3)
-		expect(IncomeLedger.pending(data, "1")).toBe(105 * cap)
+		expect(IncomeLedger.pending(data, "1")).toBeNear(70 * 1.02 * cap, 1e-6)
 	end)
 end)

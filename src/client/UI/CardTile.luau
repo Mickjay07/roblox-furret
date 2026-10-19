@@ -61,7 +61,7 @@ end
 
 -- Tile for cards whose uploaded artwork is a complete printed card (Config.Assets.FullCardArt):
 -- the image is shown as-is (aspect preserved) with status tags on top. The printed income is
--- the base income, so an effective-income tag appears when a variant or grade changes it.
+-- the base (Normal) income, so a "+N%" tag above it shows a variant or grade bonus.
 local function fullArtTile(def: Types.CardDef, image: string, opts: Options, variant: Types.VariantDef): TextButton
 	local tile: TextButton = Create("TextButton", {
 		Name = def.Id,
@@ -106,10 +106,11 @@ local function fullArtTile(def: Types.CardDef, image: string, opts: Options, var
 	if opts.Count and opts.Count > 1 then
 		tag(tile, `x{opts.Count}`, Theme.Colors.Panel, UDim2.new(0.97, 0, 0.3, 0), Vector2.new(1, 0))
 	end
-	if opts.Income and math.abs(opts.Income - def.BaseIncome) > 1e-6 then
+	local bonus = if opts.Income then Format.bonusPercent(opts.Income, def.BaseIncome) else nil
+	if bonus then
 		tag(
 			tile,
-			`+{Format.short(opts.Income)}/S`,
+			bonus,
 			Theme.Colors.Cash:Lerp(Color3.new(0, 0, 0), 0.35),
 			UDim2.new(0.5, 0, 0.7, 0),
 			Vector2.new(0.5, 0)

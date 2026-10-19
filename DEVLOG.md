@@ -3,6 +3,20 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Shiny earns +2% (owner decision)
+
+- `Config/Variants`: Shiny income multiplier changed from 1.5 to **1.02**: a Shiny copy earns
+  2% more than the Normal card (Sandy 70 → 71.4/s, Frost 1,500 → 1,530/s). Its sale
+  multiplier stays 1.5: variants can now set a separate sale multiplier, and only income
+  was changed. Gold, Holo and Rainbow are unchanged.
+- The bonus is applied once, through `Economy.cardIncome`, as before.
+- Display: the artwork prints the Normal income. Card tiles and 3D stands now show the
+  variant/grade bonus as a "+N%" tag above that printed income ("+2%" for Shiny), from the
+  new `Format.bonusPercent`. Before, they showed the effective amount.
+- Tests: `CardIncome.spec` updated for +2%, plus 2 new tests for the "+2%" tag and the
+  unchanged Shiny sale multiplier. `./scripts/check.sh`: all checks passed, 199 tests. Not
+  verified in Studio.
+
 ## 2026-10-19: Card income audit (artwork = source of truth)
 
 **Artwork vs config:** the printed "+N/s" was re-read from each Pack 1 image: Sandy 70,

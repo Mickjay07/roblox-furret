@@ -9,8 +9,8 @@
 --   * The aspect ratio of the art is preserved; the illustration always faces the camera.
 --   * One RenderStepped loop floats every illustration (no per-card loops); disabled when the
 --     player turns on Reduced Motion.
---   * The art prints the card's base (Normal) income. When a variant or grade changes it, an
---     income tag shows CardIncome, which the server computes with the central formula.
+--   * The art prints the card's base (Normal) income. When a variant or grade changes it, a
+--     "+N%" tag above the printed income shows the bonus, from the server's CardIncome.
 --   * Rarity effects follow Config.Visuals.RarityEffects and only run near the camera.
 --   * Everything created here is destroyed when a stand is cleared or its plot released.
 
@@ -197,18 +197,19 @@ local function render(visual: Visual)
 			Parent = tag,
 		})
 	end
-	-- The printed art shows the base income; tag the real income when it differs.
-	if art and math.abs(cardIncome - def.BaseIncome) > 1e-6 then
+	-- The printed art shows the base income; tag the bonus above it when income differs.
+	local bonus = Format.bonusPercent(cardIncome, def.BaseIncome)
+	if art and bonus then
 		local incomeTag = Create("Frame", {
 			Name = "Income",
-			Size = UDim2.fromScale(0.7, 0.1),
+			Size = UDim2.fromScale(0.4, 0.1),
 			Position = UDim2.fromScale(0.5, 0.7),
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundColor3 = Theme.Colors.Cash:Lerp(Color3.new(0, 0, 0), 0.35),
 			Parent = gui,
 		}, { Components.corner(UDim.new(0.3, 0)) })
 		Components.label({
-			Text = `+{Format.short(cardIncome)}/S`,
+			Text = bonus,
 			Size = UDim2.fromScale(0.9, 0.85),
 			Position = UDim2.fromScale(0.05, 0.075),
 			Parent = incomeTag,

@@ -53,4 +53,18 @@ function Format.duration(seconds: number): string
 	return string.format("%d:%02d", m, s % 60)
 end
 
+-- Income bonus over a base value as a tag: (71.4, 70) -> "+2%", (210, 70) -> "+200%".
+-- Nil when there is no visible difference.
+function Format.bonusPercent(value: number, base: number): string?
+	if base <= 0 then
+		return nil
+	end
+	local rounded = math.floor((value / base - 1) * 1000 + 0.5) / 10
+	if rounded == 0 then
+		return nil
+	end
+	local text = if rounded % 1 == 0 then string.format("%d", rounded) else string.format("%.1f", rounded)
+	return (if rounded > 0 then "+" else "") .. text .. "%"
+end
+
 return Format

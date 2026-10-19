@@ -1,5 +1,6 @@
 --!strict
--- Card variants (finishes). A variant multiplies the card's income and sale value.
+-- Card variants (finishes). A variant multiplies the card's income and sale value. The card
+-- artwork prints the Normal income; a variant's bonus is shown as "+N%" above it.
 local Types = require(script.Parent.Parent.Types)
 
 local function variant(
@@ -8,7 +9,8 @@ local function variant(
 	color: Color3,
 	mult: number,
 	weight: number,
-	luck: boolean
+	luck: boolean,
+	saleMult: number?
 ): Types.VariantDef
 	return table.freeze({
 		Id = id,
@@ -16,7 +18,7 @@ local function variant(
 		Order = order,
 		Color = color,
 		IncomeMultiplier = mult,
-		SaleMultiplier = mult,
+		SaleMultiplier = saleMult or mult,
 		DropWeight = weight,
 		LuckAffected = luck,
 	})
@@ -24,7 +26,8 @@ end
 
 local list: { Types.VariantDef } = {
 	variant("Normal", 1, Color3.fromRGB(255, 255, 255), 1, 1000, false),
-	variant("Shiny", 2, Color3.fromRGB(190, 240, 255), 1.5, 60, true),
+	-- Owner decision: Shiny earns +2% income; its sale value multiplier stays 1.5.
+	variant("Shiny", 2, Color3.fromRGB(190, 240, 255), 1.02, 60, true, 1.5),
 	variant("Gold", 3, Color3.fromRGB(255, 205, 60), 3, 15, true),
 	variant("Holo", 4, Color3.fromRGB(150, 220, 255), 6, 4, true),
 	variant("Rainbow", 5, Color3.fromRGB(255, 120, 200), 12, 1, true),
