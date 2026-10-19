@@ -30,6 +30,11 @@ function Validate.id(maxLength: number): Checker
 	return Validate.string(maxLength, "^[%w_%-]+$")
 end
 
+-- Card instance ids: "<userId>-<serial>".
+function Validate.instanceId(): Checker
+	return Validate.string(40, "^%d+%-%d+$")
+end
+
 function Validate.integer(min: number, max: number): Checker
 	return function(value)
 		if not isFiniteNumber(value) or value % 1 ~= 0 then

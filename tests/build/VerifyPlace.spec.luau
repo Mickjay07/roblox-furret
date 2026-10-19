@@ -38,6 +38,10 @@ describe("built place", function()
 		{ path = { "ReplicatedStorage", "Shared" }, class = "Folder" },
 		{ path = { "ServerScriptService", "Server", "Services", "DataService" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Services", "SettingsService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Services", "PackService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Services", "CardService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Services", "UpgradeService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Services", "EconomyService" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "SessionStore" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "Net" }, class = "ModuleScript" },
 		{
@@ -48,7 +52,28 @@ describe("built place", function()
 			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "HUDController" },
 			class = "ModuleScript",
 		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "PacksController" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "BackpackController" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "DisplayController" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "UpgradesController" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "BinderController" },
+			class = "ModuleScript",
+		},
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "Windows" }, class = "ModuleScript" },
+		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "CardTile" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Config" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Config", "Cards" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Remotes" }, class = "ModuleScript" },

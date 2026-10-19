@@ -1,12 +1,39 @@
 # Implementation status
 
-Last updated: 2026-10-19 (Phase 1).
+Last updated: 2026-10-19 (Phase 2).
 
 Legend: ✅ implemented and covered by automated tests · 🟡 implemented, needs a Studio play
 test · ⬜ not started.
 
 None of this has been play-tested in Roblox Studio yet. Studio cannot run in the cloud
 environment. See [TESTING.md](TESTING.md) for the manual checklist.
+
+## Phase 2: Core gameplay loop
+
+| Area | Status | Where |
+| --- | --- | --- |
+| Buy and open packs: server-side rolls, unlock and capacity checks, XP and level-ups with a Treats reward | ✅ logic / 🟡 live | `Logic/PackShop.luau`, `Services/PackService.luau` |
+| Card reveal overlay (staggered pop-in, NEW! badges, "1 IN X" odds) | 🟡 | `Controllers/PacksController.luau` |
+| Pack shop window (quantity ×1–10, found count, chase-card odds, lock reasons) | 🟡 | `PacksController` |
+| Display stands: place, move, remove, Place Best, sanitize | ✅ logic / 🟡 UI | `Logic/Display.luau`, `Services/CardService.luau`, `DisplayController` |
+| Passive income every second from stands (upgrade and collection multipliers) | ✅ maths / 🟡 live | `Logic/Economy.luau`, `Services/EconomyService.luau` |
+| Backpack window (grid, sort by recent, rarity or best; capacity; detail panel with stand, favourite and sell actions) | 🟡 | `BackpackController` |
+| Selling: all-or-nothing, protects favourite and displayed cards; favourites | ✅ logic / 🟡 UI | `Logic/Market.luau`, `CardService` |
+| Upgrades window and purchases (stands, income, luck, sell bonus, backpack space) | ✅ logic / 🟡 UI | `Logic/UpgradeShop.luau`, `UpgradeService`, `UpgradesController` |
+| Binder window (collection progress, discovered and unknown cards, completion bonus) | 🟡 | `BinderController` |
+| Starter cards placed on stands automatically | ✅ | `Logic/Account.luau` |
+| Economy pacing simulation | ✅ tool | `scripts/simulate.luau` |
+
+### Not in Phase 2
+
+- **Physical plot:** there are no 3D display stands or world stations yet. Stands exist
+  only in the UI.
+- **Grading service and UI:** not built. The rules and config are ready.
+- **Pack stock and restock timers:** not built.
+- **Boosts, quests, daily rewards, offline earnings:** not built.
+- **Monetization purchase handling:** not built.
+- **Sound and music:** none yet.
+- **Final card and pack artwork:** placeholder tiles for now.
 
 ## Phase 1: Foundation
 
@@ -47,10 +74,11 @@ reference screenshots. Every value is in `src/shared/Config/`.
 1. **Currencies:**
    - Cash is the main currency.
    - Treats are a secondary currency, earned as a level-up reward.
-2. **Starter bundle:** 100 Cash plus two Common Backyard Burrow cards.
+2. **Starter bundle:** 1,500 Cash (two Burrow Packs) plus two Common Backyard Burrow cards.
 3. **Packs open immediately on purchase.** There is no unopened-pack inventory. Each pack
    gives 3 cards.
-4. **Prices:** each pack costs roughly 60 seconds of its expected income per card.
+4. **Prices:** each pack costs roughly 15 minutes of its expected income per card. The
+   pacing was tuned with `scripts/simulate.luau`; see the Phase 2 DEVLOG entry.
 5. **Variants multiply income and sale value:** Normal ×1, Shiny ×1.5, Gold ×3, Holo ×6,
    Rainbow ×12.
 6. **Grades:**

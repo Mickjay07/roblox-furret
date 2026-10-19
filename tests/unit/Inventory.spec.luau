@@ -66,6 +66,8 @@ describe("Account", function()
 		expect(data.Currency.Cash).toBe(Config.Economy.StartingCurrency.Cash)
 		expect(Inventory.count(data)).toBe(#Config.Economy.StarterCards)
 		expect(data.Flags.StarterGranted).toBe(true)
+		local Economy = Loader.require("src/shared/Logic/Economy")
+		expect(Economy.totalIncome(data) > 0).toBe(true)
 	end)
 
 	it("validates settings by key and type", function()

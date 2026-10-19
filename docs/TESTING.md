@@ -65,6 +65,13 @@ network blocks. With `SKIP_SELENE_IF_OFFLINE=1`, `check.sh` falls back to
 check their members, so every other lint still runs. CI on GitHub Actions has full network
 access and uses the real std.
 
+## Economy simulation
+
+`lune run scripts/simulate [hours]` plays a simple greedy strategy (save for the best
+unlocked pack, Place Best, buy upgrades that pay back within 60 seconds) against the real
+Config and Logic modules. It prints when each pack unlocks and how income grows. Use it
+after changing prices or curves. It is a pacing aid, not a pass/fail test.
+
 ## Writing tests
 
 - Put Roblox-free logic in `src/shared/...` and add `tests/unit/<Name>.spec.luau`, using
@@ -89,7 +96,7 @@ DEVLOG.md.
 
 **Real DataStore (Game Settings > Security > Enable Studio Access to API Services ON; use
 a test place)**
-- [ ] First join: a welcome toast appears, and the HUD shows 100 cash and 0 income.
+- [ ] First join: a welcome toast appears, and the HUD shows 1,500 cash and +2 cash/s (starter cards are placed automatically).
 - [ ] Change a setting, stop, and play again: the setting and the cash persist, and the
       starter toast does not appear again.
 
@@ -101,6 +108,24 @@ a test place)**
 - [ ] Unbuilt features show "Coming soon!".
 - [ ] The Settings window opens and closes.
 - [ ] The Notifications and Reduced Motion toggles work.
+
+**Core loop (Phase 2)**
+- [ ] Buy a Burrow Pack: cash drops by the price, and the reveal shows 3 cards with
+      "1 IN X" labels and NEW! badges on first discoveries. Tapping closes the reveal.
+- [ ] Buying ×2 to ×10 at once charges the right total and reveals every card.
+- [ ] Locked packs show their requirement and cannot be bought, including by firing the
+      remote from the command bar.
+- [ ] My Stands: Place Best fills the stands, and the HUD's cash/s matches the window and
+      ticks into cash every second.
+- [ ] Backpack: sorting works; place on, or remove from, a stand; favourite; sell (cash
+      rises, the card disappears). Favourite and on-stand cards cannot be sold.
+- [ ] Upgrades: buying Display Stands adds a stand slot. Costs rise, and maxed upgrades
+      show MAXED.
+- [ ] Binder: discovered cards show, unknown ones show "?", and the counts match.
+- [ ] Level-up toast appears and Treats increase.
+- [ ] Rejoin with real DataStores: cards, stands, upgrades and cash all persist.
+- [ ] Spam-click Buy: there are no duplicate purchases beyond what the cash allows, and the
+      rate limit shows "Slow down!".
 
 **Responsive layout**
 - [ ] With the Device emulator set to a phone, the HUD and windows fit on screen.

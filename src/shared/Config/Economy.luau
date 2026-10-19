@@ -8,7 +8,7 @@ return table.freeze({
 	}),
 
 	StartingCurrency = table.freeze({
-		Cash = 100,
+		Cash = 1500,
 		Treats = 0,
 	} :: { [string]: number }),
 
@@ -22,8 +22,8 @@ return table.freeze({
 
 	-- Level curve: XP needed to go from level L to L + 1 = floor(XpBase * L ^ XpExponent).
 	Progression = table.freeze({
-		XpBase = 40,
-		XpExponent = 1.5,
+		XpBase = 60,
+		XpExponent = 1.6,
 		MaxLevel = 100,
 		TreatsPerLevel = 5,
 	}),

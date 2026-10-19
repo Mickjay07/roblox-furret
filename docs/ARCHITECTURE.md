@@ -24,7 +24,8 @@ ReplicatedStorage.Shared          (src/shared)  - required by server and client
   Data/ProfileSchema              saved-data defaults, migrations, reconcile
   Logic/                          pure game rules
     CardRegistry, Economy, Progression, Collections, PackRoller, Grading,
-    Wallet, Inventory, Account, ConfigCheck
+    Wallet, Inventory, Account, ConfigCheck,
+    PackShop, Display, Market, UpgradeShop     (gameplay transactions)
   Util/                           WeightedRandom, Validate, RateLimiter, Signal, Format
 
 ServerScriptService.Server        (src/server)
@@ -35,18 +36,42 @@ ServerScriptService.Server        (src/server)
     Net                           remote creation, validation, rate limiting
   Services/
     DataService                   load/save lifecycle, replication, leaderstats
-    SettingsService               UpdateSetting remote
+    SettingsService               UpdateSetting
+    PackService                   BuyPack (server-side Random)
+    CardService                   PlaceCard, RemoveCard, PlaceBest, SellCards, SetFavorite
+    UpgradeService                BuyUpgrade
+    EconomyService                passive income tick
 
 StarterPlayerScripts.Client       (src/client)
   init.client                     bootstrap: Init/Start of Controllers
-  Lib/Remotes                     safe invoke / event helpers
-  UI/                             Theme, Create, Components, Windows (window manager)
+  Lib/Remotes, Lib/Request        safe invoke / event helpers; Request toasts errors and
+                                  drops duplicate in-flight requests (double-clicks)
+  UI/                             Theme, Create, Components, Windows, CardTile
   Controllers/
     DataController                client mirror of the player's data
     NotificationController        toasts
     HUDController                 HUD and navigation
     SettingsController            Settings window
+    PacksController               pack shop + reveal overlay
+    BackpackController            backpack grid + card actions
+    DisplayController             "My Stands"
+    UpgradesController            upgrades
+    BinderController              collections
 ```
+
+### Gameplay transaction pattern
+
+Every request follows the same steps:
+
+1. `Net` validates the argument types and the rate limit.
+2. The service fetches the live data with `DataService:GetData`.
+3. The service calls a pure transaction (`PackShop.buy`, `Display.place`, `Market.sell`,
+   `UpgradeShop.buy`, …). The transaction **checks everything before changing anything**,
+   then returns `(true, result)` or `(false, message for the player)`.
+4. The service replicates exactly what changed: `Changed` for whole fields, `Patched` for
+   map entries.
+
+Because the transactions are pure, the Lune tests exercise the same code the server runs.
 
 ### Service / controller lifecycle
 
@@ -145,6 +170,12 @@ use the mock store.
   3. **Error isolation:** a handler error is logged and the client receives a generic
      failure.
 - Handlers return `{ ok = true, ... }` or `{ ok = false, error = "..." }`.
+
+Requests (client to server): `GetSnapshot`, `UpdateSetting(key, value)`,
+`BuyPack(packId, amount 1-10)`, `PlaceCard(instanceId, slot 0-100)`,
+`RemoveCard(instanceId)`, `PlaceBest()`, `SellCards({instanceId} up to 50)`,
+`SetFavorite(instanceId, bool)` and `BuyUpgrade(upgradeId)`. Instance ids must match
+`^%d+%-%d+$`, and pack and upgrade ids must exist in Config.
 - Handlers must also check game rules: ownership, affordability, unlocks and capacity.
 
 **Replication:**

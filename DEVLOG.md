@@ -3,6 +3,54 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Phase 2: core gameplay loop
+
+**Changed**
+- **Pure transactions:**
+  - `Logic/PackShop` (buy and open packs, with unlock, amount, capacity and cash checks
+    before any change; luck; odds; XP, level-ups and Treats).
+  - `Logic/Display` (place, move, remove, Place Best, sanitize).
+  - `Logic/Market` (all-or-nothing selling that protects favourite and displayed cards;
+    favourites).
+  - `Logic/UpgradeShop`.
+- **Services:** `PackService` (server-side `Random`), `CardService`, `UpgradeService` and
+  `EconomyService` (income every second). Seven new validated remotes, plus a rate limit
+  for `PlaceBest`.
+- **Client:**
+  - `CardTile` (rarity-coloured placeholder art, variant, NEW!, FAV, ON STAND and count
+    tags) and `Lib/Request` (shows error toasts and drops double-clicks).
+  - Windows: Packs with a reveal overlay, Backpack, My Stands, Upgrades and Binder. Every
+    HUD navigation button now opens a working window.
+- **Starter cards** are placed on stands automatically, so income starts at once.
+- **Balance:**
+  - `scripts/simulate.luau` showed the first prices were far too low: every pack unlocked
+    within 12 minutes, and the simulated player was buying a pack every second.
+  - Pack prices were raised to about 15 minutes of per-card income
+    (750 / 20K / 125K / 1M / 15M / 200M), starting cash went to 1,500, and the XP curve
+    was slowed (60·L^1.6).
+  - Simulated unlocks are now Snack at 18 minutes, Knight at 57, Shore at 1h22, Cosmic at
+    1h49 and Midnight at 2h11.
+
+**Verified (cloud container)**
+- StyLua ✅. Rojo build ✅. luau-lsp strict, 0 errors ✅. Selene with the offline
+  approximation ✅.
+- Lune: **113 passed, 0 failed** ✅. That includes 22 new gameplay tests: purchases change
+  nothing when rejected, capacity, locked cards never drop, level-ups, stand placement and
+  moves, Place Best ordering, sanitize, all-or-nothing selling, and upgrade cost and max.
+- **CI:** the Phase 1 run on GitHub Actions passed with the full Roblox-std Selene and 91
+  tests. The Phase 0 run had failed because of the `install-tools.sh` bug fixed in Phase 1.
+
+**Not verified**
+- **No Roblox Studio play test has been run.** The UI layout and feel, remote round trips,
+  live income ticks and persistence of Phase 2 data are all untested at runtime. The
+  checklist is in docs/TESTING.md ("Core loop").
+
+**Next (proposed Phase 3)**
+- A physical tycoon plot: a per-player plot with 3D display stands that show the placed
+  cards, and world stations (Packs, Sell, Upgrades).
+- Grading service and UI, and the "goal" quest panel.
+- First local Studio play test, then UI fixes based on it.
+
 ## 2026-10-19: Phase 1: foundation
 
 **Inputs**

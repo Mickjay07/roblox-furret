@@ -10,6 +10,20 @@ local Remotes = {
 	Functions = {
 		GetSnapshot = "GetSnapshot",
 		UpdateSetting = "UpdateSetting",
+		-- (packId, amount) -> { cards = { OpenedCard }, levelsGained, treatsGained }
+		BuyPack = "BuyPack",
+		-- (instanceIds) -> { earned }
+		SellCards = "SellCards",
+		-- (instanceId, favorite)
+		SetFavorite = "SetFavorite",
+		-- (instanceId, slot) where slot 0 = first empty stand
+		PlaceCard = "PlaceCard",
+		-- (instanceId)
+		RemoveCard = "RemoveCard",
+		-- () fills every stand with the best cards
+		PlaceBest = "PlaceBest",
+		-- (upgradeId) -> { level }
+		BuyUpgrade = "BuyUpgrade",
 	},
 	Events = {
 		-- (key: string, value: any) replaces a whole top-level PlayerData field.

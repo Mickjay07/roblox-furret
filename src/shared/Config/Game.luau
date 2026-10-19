@@ -32,6 +32,7 @@ return table.freeze({
 		SellCards = table.freeze({ Rate = 2, Burst = 4 }),
 		PlaceCard = table.freeze({ Rate = 6, Burst = 12 }),
 		RemoveCard = table.freeze({ Rate = 6, Burst = 12 }),
+		PlaceBest = table.freeze({ Rate = 1, Burst = 3 }),
 		SetFavorite = table.freeze({ Rate = 6, Burst = 12 }),
 		BuyUpgrade = table.freeze({ Rate = 3, Burst = 6 }),
 	}),

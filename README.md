@@ -3,10 +3,15 @@
 A Roblox collectible card tycoon game. The source code lives in this repository as plain
 Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 
-> **Status:** Phase 1 (foundation) is implemented: configuration, card registry, player
-> data, session-locked persistence, validated remotes and the HUD. Nothing has been
-> play-tested in Roblox Studio yet. See [docs/STATUS.md](docs/STATUS.md) and
-> [DEVLOG.md](DEVLOG.md).
+> **Status:** Phases 1 and 2 are implemented.
+>
+> - **Phase 1 (foundation):** configuration, card registry, player data, session-locked
+>   persistence, validated remotes and the HUD.
+> - **Phase 2 (core loop):** buy and open packs, card reveal, backpack, display stands with
+>   passive income, selling, upgrades and the binder.
+>
+> Nothing has been play-tested in Roblox Studio yet. See
+> [docs/STATUS.md](docs/STATUS.md) and [DEVLOG.md](DEVLOG.md).
 
 ## Prerequisites
 
@@ -76,7 +81,8 @@ The script runs, in order:
 4. luau-lsp strict type check against the Roblox API definitions
 5. Lune tests: unit tests, plus a check of the built place's structure
 
-Run `stylua src tests` to auto-format. Details are in [docs/TESTING.md](docs/TESTING.md).
+Run `stylua src tests` to auto-format. Run `lune run scripts/simulate 3` to simulate three
+hours of economy pacing. Details are in [docs/TESTING.md](docs/TESTING.md).
 
 ## Project layout
 
