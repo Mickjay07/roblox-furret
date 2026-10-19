@@ -29,15 +29,21 @@ Luau files and is synced into Roblox Studio with [Rojo](https://rojo.space).
 | Rojo Studio plugin | 7.4.x | Syncs files into Studio (install it with `rojo plugin install`) |
 | Git | any | Version control |
 
-Pinned CLI tools (from `rokit.toml`): Rojo 7.4.4, StyLua 0.20.0, Selene 0.27.1, Lune 0.8.9.
-`scripts/install-tools.sh` also installs luau-lsp 1.70.1 (type checking) and its matching Roblox type definitions.
+Pinned CLI tools (from `rokit.toml`): Rojo 7.4.4, StyLua 0.20.0, Selene 0.27.1, Lune 0.8.9, luau-lsp 1.70.1.
+`scripts/install-tools.sh` installs the same versions into `~/.local/bin`, plus the Roblox type
+definitions that luau-lsp needs. It detects the platform: macOS on Apple Silicon or Intel, and
+Linux on x86_64 or arm64. It checks every binary's format and architecture, and runs it, before
+installing, and replaces tools built for a different platform. Where a tool has no prebuilt
+release (Selene on Intel Macs; Rojo and Selene on Linux arm64), it builds it with `cargo` if
+Rust is installed. `./scripts/install-tools.sh --dry-run` shows which files it would download.
 
 ## Setup
 
 ```bash
 git clone https://github.com/Mickjay07/roblox-furret.git
 cd roblox-furret
-rokit install            # or, on Linux/CI: ./scripts/install-tools.sh
+rokit install            # or: ./scripts/install-tools.sh (macOS and Linux)
+./scripts/check.sh       # format, lint, build, type check, tests
 rojo plugin install      # installs the Rojo plugin into Roblox Studio
 ```
 

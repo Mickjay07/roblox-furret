@@ -6,6 +6,24 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PATH="$HOME/.local/bin:$PATH"
 
+# Fail early with a clear message when a tool is missing or built for another platform
+# (for example Linux binaries on a Mac, which otherwise fail with "cannot execute binary file").
+missing=""
+for tool in stylua selene rojo luau-lsp lune; do
+	if ! path=$(command -v "$tool"); then
+		echo "MISSING: $tool is not on PATH" >&2
+		missing="$missing $tool"
+	elif ! "$path" --version >/dev/null 2>&1; then
+		echo "BROKEN: $path does not run on this machine ($(uname -s) $(uname -m))" >&2
+		command -v file >/dev/null 2>&1 && echo "        $(file -b "$path" | cut -c1-80)" >&2
+		missing="$missing $tool"
+	fi
+done
+if [ -n "$missing" ]; then
+	echo "Run scripts/install-tools.sh to install or repair:$missing" >&2
+	exit 1
+fi
+
 echo "==> stylua (format check)"
 stylua --check src tests
 

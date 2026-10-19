@@ -3,6 +3,47 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Fix `install-tools.sh` on macOS (Apple Silicon)
+
+**Problem:** the installer always downloaded the Linux x86-64 builds. On an Apple Silicon Mac,
+`~/.local/bin/stylua` and `selene` were therefore Linux ELF files, and `./scripts/check.sh`
+failed with "cannot execute binary file".
+
+**Fix (tool versions unchanged):**
+- `scripts/install-tools.sh` now detects the platform (macOS arm64/x86_64, Linux
+  x86_64/arm64). A shell running under Rosetta on Apple Silicon still gets arm64 tools.
+- Each tool's release file for each platform was checked against the pinned release.
+  Exceptions:
+  - Selene 0.27.1 has one build per OS: `linux` = x86_64 and `macos` = arm64 only.
+  - luau-lsp's macOS build is universal.
+  - Rojo 7.4.4 and Selene have no Linux arm64 build, and Selene has none for Intel Macs.
+    Those are built with `cargo install --locked` when Rust is installed; otherwise the
+    script says so.
+- **Before installing,** each binary must be a native executable for this platform (`file`;
+  a magic-byte check when `file` is missing) and run `--version` with the pinned version.
+  Otherwise it is refused. Existing wrong-platform binaries are detected and replaced.
+- Other tools still install when one fails, and the script exits non-zero naming the
+  failures. `--dry-run` prints the URLs for the platform; `TOOLS_OS`/`TOOLS_ARCH`
+  override detection in that mode only.
+- The script stays compatible with macOS's bash 3.2.
+- `scripts/check.sh` first checks that every tool is on PATH and runs on this machine. If
+  one doesn't, it names the tool and its binary type and points to the installer.
+- `rokit.toml` now also pins luau-lsp 1.70.1, so `rokit install` covers every tool
+  `check.sh` needs.
+
+**Verified (Linux x86_64 cloud container; no Mac was available):**
+- Every URL from `--dry-run` resolves (HTTP 200) for all four platforms.
+- The downloaded macOS arm64 builds of all five tools are Mach-O arm64 (luau-lsp is
+  universal). The macOS x86_64 builds of Rojo, StyLua and Lune are Mach-O x86_64.
+- Planted wrong-platform binaries (macOS arm64 `stylua`, Linux arm64 `selene`) were detected
+  and replaced; a second run reports everything already installed.
+- A deliberately wrong download (the macOS StyLua build on Linux) was refused; the other
+  tools installed and the exit code was 1.
+- `check.sh` names a broken tool and stops.
+- `SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh` on this container: all checks passed,
+  179 tests.
+- **Not run on macOS:** the installer and `check.sh` still need a run on the owner's Mac.
+
 ## 2026-10-19: Phase A1–A3: developer tools, 3D world, physical plots, Pack 1 art
 
 **Input**
