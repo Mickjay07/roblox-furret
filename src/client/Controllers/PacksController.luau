@@ -15,6 +15,7 @@ local Economy = require(Shared.Logic.Economy)
 local Entitlements = require(Shared.Logic.Entitlements)
 local PackRoller = require(Shared.Logic.PackRoller)
 local Progression = require(Shared.Logic.Progression)
+local UiLayout = require(Shared.Logic.UiLayout)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
@@ -73,20 +74,29 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amount = 1
 	-- Opening size for this row: 1, 3 or 6 packs at once.
 	local mode = 1
-	local row = Create("Frame", {
+	local row = Components.panel({
 		Name = pack.Id,
-		Size = UDim2.new(1, -12, 0, 172),
-		BackgroundColor3 = Theme.Colors.PanelInset,
+		Size = UDim2.new(1, -12, 0, 206),
 		LayoutOrder = pack.Order,
 		Parent = list,
-	}, { Components.corner(UDim.new(0, 14)), Components.stroke(Theme.Colors.Border, 2) })
+	})
 
+	-- Soft gold glow behind the pack art.
+	Create("Frame", {
+		Name = "Glow",
+		Size = UDim2.fromOffset(112, 160),
+		Position = UDim2.fromOffset(12, 10),
+		BackgroundColor3 = Theme.Colors.Gold,
+		BackgroundTransparency = 0.82,
+		Active = false,
+		Parent = row,
+	}, { Components.corner(UDim.new(0, 18)) })
 	local packArt = CardArt.forPack(pack)
 	if packArt then
 		Create("ImageLabel", {
 			Name = "PackArt",
-			Size = UDim2.fromOffset(70, 105),
-			Position = UDim2.fromOffset(16, 9),
+			Size = UDim2.fromOffset(100, 150),
+			Position = UDim2.fromOffset(18, 15),
 			BackgroundTransparency = 1,
 			Image = packArt,
 			ScaleType = Enum.ScaleType.Fit,
@@ -95,22 +105,24 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		ArtDiagnostics.watch("Pack Shop", pack.Artwork, packArt)
 	else
 		ArtDiagnostics.fallback("Pack Shop", pack.Artwork)
-		local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(84, 104))
-		icon.Position = UDim2.fromOffset(10, 10)
+		local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(100, 150))
+		icon.Position = UDim2.fromOffset(18, 15)
 		icon.Parent = row
 	end
 
 	Components.label({
 		Text = string.upper(pack.DisplayName),
-		Size = UDim2.new(0, 300, 0, 34),
-		Position = UDim2.fromOffset(110, 10),
+		Size = UDim2.new(0, 330, 0, 34),
+		Position = UDim2.fromOffset(136, 12),
+		Color = Theme.Colors.Gold,
 		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 3,
 		Parent = row,
 	})
 	local info = Components.label({
 		Text = "",
-		Size = UDim2.new(0, 300, 0, 22),
-		Position = UDim2.fromOffset(110, 48),
+		Size = UDim2.new(0, 330, 0, 22),
+		Position = UDim2.fromOffset(136, 52),
 		XAlign = Enum.TextXAlignment.Left,
 		Color = Theme.Colors.Muted,
 		StrokeThickness = 1.5,
@@ -118,8 +130,8 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	})
 	local chase = Components.label({
 		Text = "",
-		Size = UDim2.new(0, 300, 0, 22),
-		Position = UDim2.fromOffset(110, 76),
+		Size = UDim2.new(0, 330, 0, 22),
+		Position = UDim2.fromOffset(136, 82),
 		XAlign = Enum.TextXAlignment.Left,
 		Color = Theme.Colors.Treats,
 		StrokeThickness = 1.5,
@@ -129,7 +141,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amountLabel = Components.label({
 		Text = "x1",
 		Size = UDim2.fromOffset(60, 34),
-		Position = UDim2.new(1, -282, 0, 82),
+		Position = UDim2.new(1, -306, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 	})
@@ -143,7 +155,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	buy = Components.button({
 		Text = "",
 		Style = "Green",
-		Size = UDim2.fromOffset(190, 56),
+		Size = UDim2.fromOffset(210, 56),
 		Position = UDim2.new(1, -14, 0, 14),
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
@@ -160,8 +172,8 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local open = Components.button({
 		Text = "NO PACKS",
 		Style = "Gray",
-		Size = UDim2.fromOffset(190, 40),
-		Position = UDim2.new(1, -14, 0, 76),
+		Size = UDim2.fromOffset(210, 46),
+		Position = UDim2.new(1, -14, 0, 80),
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
@@ -172,10 +184,10 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	-- Opening mode strip: 1 pack always; 3x / 6x with the Multi Opening game passes.
 	Components.label({
 		Text = "OPEN:",
-		Size = UDim2.fromOffset(70, 30),
-		Position = UDim2.fromOffset(16, 130),
+		Size = UDim2.fromOffset(70, 28),
+		Position = UDim2.fromOffset(136, 158),
 		XAlign = Enum.TextXAlignment.Left,
-		Color = Theme.Colors.Muted,
+		Color = Theme.Colors.Gold,
 		Parent = row,
 	})
 	local refreshModes: () -> () = function() end
@@ -188,8 +200,8 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		local button = Components.button({
 			Text = "",
 			Style = "Blue",
-			Size = UDim2.fromOffset(196, 36),
-			Position = UDim2.fromOffset(90 + (i - 1) * 206, 128),
+			Size = UDim2.fromOffset(196, 38),
+			Position = UDim2.fromOffset(210 + (i - 1) * 204, 154),
 			Parent = row,
 			OnClick = function()
 				local data = DataController:Get()
@@ -213,9 +225,9 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	end
 	Components.button({
 		Text = "-",
-		Style = "Blue",
+		Style = "Brown",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -326, 0, 82),
+		Position = UDim2.new(1, -350, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
@@ -225,9 +237,9 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	})
 	Components.button({
 		Text = "+",
-		Style = "Blue",
+		Style = "Brown",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -238, 0, 82),
+		Position = UDim2.new(1, -262, 0, 82),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
@@ -240,16 +252,27 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local lock = Create("Frame", {
 		Name = "Lock",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.35,
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+		BackgroundTransparency = 0.18,
 		ZIndex = 5,
 		Visible = false,
+		Active = true, -- a locked pack can't be clicked through
 		Parent = row,
 	}, { Components.corner(UDim.new(0, 14)) })
-	local lockText = Components.label({
+	local lockTitle = Components.label({
 		Text = "LOCKED",
-		Size = UDim2.new(0.8, 0, 0, 36),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0.6, 0, 0, 36),
+		Position = UDim2.fromScale(0.5, 0.36),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Color = Theme.Colors.Gold,
+		StrokeThickness = 3,
+		Parent = lock,
+	})
+	lockTitle.ZIndex = 6
+	local lockText = Components.label({
+		Text = "",
+		Size = UDim2.new(0.8, 0, 0, 26),
+		Position = UDim2.fromScale(0.5, 0.6),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = lock,
 	})
@@ -300,12 +323,12 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 				elseif owned > 0 then `NEED {mode} PACKS`
 				else "NO PACKS"
 		)
-		Components.setButtonStyle(open, if owned >= mode then "Orange" else "Gray")
+		Components.setButtonStyle(open, if owned >= mode then "Gold" else "Gray")
 		for _, entry in modeButtons do
 			local label, style
 			if Entitlements.canUseMode(data, entry.packs) then
 				label = if entry.packs == 1 then "1 PACK" else `{entry.packs} PACKS`
-				style = if entry.packs == mode then "Orange" else "Blue"
+				style = if entry.packs == mode then "Gold" else "Brown"
 			elseif entry.product then
 				local product = entry.product :: Entitlements.Product
 				local available, price = productState(product.Key)
@@ -329,8 +352,10 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 			Components.setButtonText(entry.button, label or "")
 			Components.setButtonStyle(entry.button, style or "Gray")
 		end
-		local affordable = (data.Currency[pack.Currency] or 0) >= pack.Price * amount
-		Components.setButtonStyle(buy, if affordable and missing == nil then "Green" else "Gray")
+		-- Insufficient funds: say how much is missing instead of a dead BUY button.
+		local need = UiLayout.shortfall(data.Currency[pack.Currency] or 0, pack.Price * amount)
+		Components.setButtonText(buy, need or ("BUY $" .. Format.short(pack.Price * amount, 1e6)))
+		Components.setButtonStyle(buy, if need == nil and missing == nil then "Green" else "Gray")
 		lockText.Text = if missing then string.upper(missing) else ""
 	end
 	DataController:Observe("Progression", refresh)
@@ -364,21 +389,41 @@ end
 
 function PacksController:Start()
 	Windows.register("Packs", {
-		Title = "Packs",
-		Accent = "Green",
-		Size = Vector2.new(820, 540),
+		Title = "Pack Shop",
+		Icon = "pack.pack1.front",
+		Size = Vector2.new(920, 640),
 		Build = function(content: Frame)
+			Components.sectionTitle("CHOOSE A PACK", UDim2.new(1, -470, 0, 30), content)
+			local balance = Components.chip("$0", Theme.Colors.BrownDark, UDim2.fromOffset(250, 34), content)
+			balance.Position = UDim2.fromScale(1, 0)
+			balance.AnchorPoint = Vector2.new(1, 0)
+			local packsChip = Components.chip("", Theme.Colors.Brown, UDim2.fromOffset(200, 34), content)
+			packsChip.Position = UDim2.new(1, -262, 0, 0)
+			packsChip.AnchorPoint = Vector2.new(1, 0)
+			DataController:Observe("Currency", function(data: Types.PlayerData)
+				Components.setChipText(balance, `BALANCE ${Format.short(data.Currency.Cash or 0, 1e9)}`)
+			end)
+			DataController:Observe("Packs", function(data: Types.PlayerData)
+				local total = 0
+				for _, count in data.Packs do
+					total += count
+				end
+				Components.setChipText(packsChip, `MY PACKS: {total}`)
+			end)
 			local list = Create("ScrollingFrame", {
 				Name = "List",
-				Size = UDim2.fromScale(1, 1),
+				Size = UDim2.new(1, 0, 1, -46),
+				Position = UDim2.fromOffset(0, 46),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				ScrollBarThickness = 8,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
 				CanvasSize = UDim2.new(),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				Parent = content,
 			}, {
-				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }),
+				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12) }),
+				Create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingTop = UDim.new(0, 4) }),
 			})
 			for _, pack in Config.Packs.List do
 				buildRow(list, pack)

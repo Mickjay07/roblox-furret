@@ -350,6 +350,52 @@ owned.
       and icons scale with the screen, don't overlap the top buttons or the Collect
       button, and stay tappable.
 
+### 1.18 GUI redesign (every window) - check on desktop, phone portrait and landscape
+Use Studio's Device emulator (e.g. 1920×1080, iPhone 14 portrait/landscape, iPad).
+- [ ] **Shared frame** (Pack Shop, Backpack, Binder, Upgrades, Settings, My Stands):
+      forest-green body with a gold rim, gold ribbon header with the window's custom icon
+      and title, round red X, faint paw prints; the world behind is dimmed. Clicking the
+      dimmed area or X closes the window; only one window is open at a time.
+- [ ] No window extends past the screen edge or into the notch area in any orientation
+      (rotate the emulator while a window is open: it re-fits).
+- [ ] **Backpack:** search filters by name/rarity/variant as you type; RECENT / RARITY /
+      BEST highlight the active sort; the capacity chip shows `cards/capacity`. Selecting
+      a card shows name, rarity chip, `SHINY +2%` chip for Shiny copies, income, sell value,
+      copies owned and status. Place/Remove, Favourite and Sell work (Sell reads `ON STAND`
+      / `FAVOURITE` and does nothing when the server would refuse). With no cards: `NO CARDS
+      YET` + OPEN SHOP (opens the Pack Shop); a search with no results says `NO MATCHES`.
+      From a physical stand the chip reads `STAND #n` and the main action places the card.
+- [ ] **Binder:** bookmarks per collection with progress bars; the page shows the
+      collection name, progress bar with %, the real completion bonus and the overall total;
+      discovered cards show art and `xN` copies; undiscovered show the card back with
+      `#00N`.
+- [ ] **Pack Shop:** balance and `MY PACKS` chips; each pack has large art with a glow,
+      chase line, BUY (green) or `NEED $X` (grey) when you can't afford it, the stepper,
+      OPEN (gold) and the 1/3/6 mode strip (selected mode gold; locked passes purple
+      `UNLOCK 3x  R$100`, `6x - NEEDS 3x` grey). Locked packs are covered by a LOCKED
+      overlay that can't be clicked through. Purchases only show success after the server
+      confirms.
+- [ ] **Upgrades:** five upgrades only; each shows level bar, `NOW: ... → NEXT: ...`,
+      and the button as `$price` (green), `NEED $X` (grey) or `MAXED` (gold).
+- [ ] **Settings:** toggles switch with a sliding knob and a `... saved` toast after the
+      server accepts; volume meters move in 10 steps (audio isn't in the game yet; the
+      setting is saved).
+- [ ] **My Stands:** each stand shows a `#n` chip; empty stands show `+` / `EMPTY STAND -
+      TAP TO PLACE`; a LOCKED slot leads to Upgrades; COLLECT ALL and PLACE BEST work.
+- [ ] **Pack opening:** forest backdrop with paw/leaf decoration; gold CLICK TO REVEAL,
+      green NEXT CARD, gold CLAIM ALL; Shiny cards get a light sweep and a `SHINY +2%`
+      ribbon; the summary sits in a gold-trimmed panel. 1 / 3 / 6 packs still give 5 / 15 /
+      30 cards with manual reveals.
+- [ ] **Notifications:** forest card with gold trim and a coloured round badge (i / ✓ / ! /
+      ✕) that pops in.
+- [ ] **HUD alignment:** the currency bar starts close to the left edge (10 px inside the
+      safe area) with no empty gap before the art; the money text sits inside the green
+      field and stays readable from `0` to `1T`. Client Output shows `[Art] measured
+      ui.currency_bar: ...` (or a warning that measuring isn't allowed - then tune
+      `Config.Visuals.Hud.CurrencyBar`). The four right-rail icons look the same size
+      (backpack no longer smaller), line up in one column and all open their windows;
+      `Config.Visuals.Hud.IconScale` can fine-tune one icon.
+
 ## Part 2: specification features (run when implemented)
 
 ### 2.4 Pack shop extras (§7.3–7.4, roadmap A8)

@@ -1,5 +1,6 @@
 --!strict
--- Toast notifications, stacked bottom-right (as in the reference screenshots).
+-- Toast notifications, stacked bottom-right (as in the reference screenshots): a forest-green
+-- card with a gold trim and a coloured badge whose symbol tells the kind at a glance.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,6 +17,7 @@ local DataController = require(script.Parent.DataController)
 
 local MAX_VISIBLE = 5
 local LIFETIME = 4
+local GLYPHS = { info = "i", success = "✓", warning = "!", error = "✕" }
 
 local NotificationController = {}
 
@@ -31,30 +33,48 @@ function NotificationController:Push(message: string, kind: string?)
 
 	local toast = Create("Frame", {
 		Name = "Toast",
-		Size = UDim2.fromOffset(340, 64),
+		Size = UDim2.fromOffset(360, 68),
 		BackgroundColor3 = Theme.Colors.Panel,
-		BackgroundTransparency = 0.05,
 		LayoutOrder = math.floor(os.clock() * 1000),
 	}, {
-		Components.corner(UDim.new(0, 12)),
-		Components.stroke(Theme.Colors.Border, 3),
-		Create("Frame", {
-			Name = "Accent",
-			Size = UDim2.new(0, 8, 1, -16),
-			Position = UDim2.fromOffset(10, 8),
-			BackgroundColor3 = accent,
-		}, { Components.corner(UDim.new(1, 0)) }),
+		Components.corner(UDim.new(0, 16)),
+		Create(
+			"UIStroke",
+			{ Color = Theme.Colors.Gold, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }
+		),
+		Create("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 185, 170)),
+		}),
+	})
+	local badge = Create("Frame", {
+		Name = "Badge",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = accent,
+		Parent = toast,
+	}, { Components.corner(UDim.new(1, 0)), Components.stroke(accent:Lerp(Color3.new(0, 0, 0), 0.5), 2.5) })
+	Components.label({
+		Text = GLYPHS[k] or "i",
+		Size = UDim2.fromScale(0.62, 0.62),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Parent = badge,
 	})
 	local label = Components.label({
 		Text = message,
-		Size = UDim2.new(1, -40, 1, -16),
-		Position = UDim2.fromOffset(28, 8),
+		Size = UDim2.new(1, -78, 1, -16),
+		Position = UDim2.fromOffset(64, 8),
 		XAlign = Enum.TextXAlignment.Left,
 		StrokeThickness = 2,
 		Parent = toast,
 	})
 	label.TextWrapped = true
 	toast.Parent = container
+	-- Slide in from the right.
+	local scale = Create("UIScale", { Scale = 0.85, Parent = toast })
+	Components.tween(scale, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
 
 	local toasts = {}
 	for _, child in container:GetChildren() do
@@ -81,11 +101,12 @@ function NotificationController:Start()
 		Name = "Notifications",
 		ResetOnSpawn = false,
 		DisplayOrder = 20,
+		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
 	container = Create("Frame", {
 		Name = "Stack",
-		Size = UDim2.fromOffset(340, 400),
+		Size = UDim2.fromOffset(360, 420),
 		Position = UDim2.new(1, -16, 1, -16),
 		AnchorPoint = Vector2.new(1, 1),
 		BackgroundTransparency = 1,

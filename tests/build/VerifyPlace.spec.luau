@@ -70,6 +70,9 @@ describe("built place", function()
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "CardArt" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "RevealStyle" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "RevealPlan" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "AlphaBounds" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "UiLayout" }, class = "ModuleScript" },
+		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "ImageBounds" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "Entitlements" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "GamePassOwnership" }, class = "ModuleScript" },
 		{

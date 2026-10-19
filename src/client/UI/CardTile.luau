@@ -247,26 +247,54 @@ function CardTile.new(def: Types.CardDef, options: Options?): GuiButton
 	return tile
 end
 
--- A face-down tile for cards not discovered yet.
-function CardTile.unknown(layoutOrder: number?): Frame
+-- A face-down tile for cards not discovered yet: the shared card back (dimmed) with the
+-- card's collection number, or a drawn back when the image isn't uploaded.
+function CardTile.unknown(layoutOrder: number?, number: number?): Frame
+	local back = CardArt.back()
 	local frame: Frame = Create("Frame", {
 		Name = "Unknown",
-		Size = UDim2.fromOffset(150, 210),
+		Size = UDim2.fromOffset(120, 180),
 		BackgroundColor3 = Theme.Colors.PanelInset,
+		BackgroundTransparency = if back then 1 else 0,
 		LayoutOrder = layoutOrder or 0,
 	}, {
 		Components.corner(UDim.new(0, 12)),
-		Components.stroke(Theme.Colors.Border, 3),
-		Create("UIAspectRatioConstraint", { AspectRatio = 5 / 7 }),
+		Create("UIAspectRatioConstraint", { AspectRatio = 2 / 3 }),
 	})
+	if back then
+		Create("ImageLabel", {
+			Name = "Back",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Image = back,
+			ImageColor3 = Color3.fromRGB(110, 120, 110),
+			ImageTransparency = 0.15,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = frame,
+		})
+	else
+		Components.stroke(Theme.Colors.GoldDark, 3).Parent = frame
+	end
 	Components.label({
 		Text = "?",
-		Size = UDim2.fromScale(0.5, 0.4),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.42, 0.3),
+		Position = UDim2.fromScale(0.5, 0.46),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = Theme.Colors.Muted,
+		Color = Theme.Colors.GoldLight,
+		StrokeThickness = 3,
 		Parent = frame,
 	})
+	if number then
+		Components.label({
+			Text = string.format("#%03d", number),
+			Size = UDim2.fromScale(0.6, 0.12),
+			Position = UDim2.fromScale(0.5, 0.86),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Color = Theme.Colors.Muted,
+			StrokeThickness = 2,
+			Parent = frame,
+		})
+	end
 	return frame
 end
 

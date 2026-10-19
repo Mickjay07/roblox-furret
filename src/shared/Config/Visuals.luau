@@ -91,9 +91,19 @@ return table.freeze({
 			MaxTextSize = 44,
 			MinTextSize = 10,
 		}),
-		-- Right rail icons (ui.icon.*): square slots, image drawn with ScaleType.Fit.
+		-- Gap between the left screen edge (inside the device safe area) and the stats panel.
+		LeftMargin = 10,
+		-- Right rail icons (ui.icon.*): square slots, image drawn with ScaleType.Fit and cropped
+		-- to its visible pixels at runtime (Lib/ImageBounds), so transparent margins don't make
+		-- one icon look smaller than another. IconScale fine-tunes a single icon if needed,
+		-- e.g. ["ui.icon.backpack"] = 1.1.
 		IconSize = 84,
+		IconScale = table.freeze({} :: { [string]: number }),
 		ShowCaptions = true,
+		-- Optional measured pixel data per image (Width, Height, MinX, MinY, MaxX, MaxY and for
+		-- the currency bar Green = { Left, Right, Top, Bottom }). Studio prints these lines as
+		-- "[Art] measured ..."; pasting one here skips the runtime measurement.
+		ImageBounds = table.freeze({} :: { [string]: any }),
 	}),
 
 	RarityEffects = table.freeze({

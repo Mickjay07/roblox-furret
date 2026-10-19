@@ -3,6 +3,84 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-19: Full GUI redesign (Ferret Frenzy visual identity) and HUD alignment fixes
+
+**Inventory of player-facing UI (before):**
+- 5 ScreenGuis: HUD, Windows, Notifications, PackReveal, Dev (Studio only).
+- 6 windows on the shared `UI/Windows` manager: Pack Shop, Backpack, Binder, Upgrades,
+  Settings, My Stands.
+- Shared building blocks: `UI/Components`, `UI/Theme`, `UI/CardTile`.
+- Everything used the prototype's grey panels; only the HUD icons were custom.
+- No purchase-confirmation dialogs or tooltips exist, and none were invented.
+
+**Design system:**
+- `Theme`: deep forest greens, gold and warm-brown trim, cream text, new Gold/Brown button
+  styles. Existing style names were kept, so every screen picked up the palette.
+- `Components`:
+  - Glossy buttons.
+  - New `panel`, `chip`, `paw` / `leaf` motifs, `sectionTitle`, `emptyState`, `searchBox`
+    and `toggle`.
+  - Gold-trimmed badges and progress bars.
+- **`Windows` (all windows):**
+  - Gold-rimmed forest frame with an inner brown rim, a gold ribbon header carrying the
+    window's custom icon (Config.Assets key), a round close button and faint paw prints.
+  - A dimmed backdrop that closes the window when clicked.
+  - Fit-to-screen scaling (`Logic/UiLayout.fitScale`), re-applied on rotation.
+  - `DeviceSafeInsets` on the Windows, HUD and Notifications ScreenGuis.
+
+**Screens rebuilt:**
+- **Backpack:** search (client filter over real data), highlighted sorts and a capacity chip.
+  - The details panel shows the card, rarity and variant chips (`SHINY +2%`), income, sell
+    value, copies owned and stand status.
+  - Actions: Place/Remove, Favourite and Sell; Sell explains when the server would refuse.
+  - Loading, empty (OPEN SHOP) and no-match states.
+- **Binder:** album with bookmarks (colour spine, progress bar, count) and a page with
+  progress %, the real completion bonus and the overall total. Undiscovered cards show the
+  shared card back with their number (`CardTile.unknown`).
+- **Pack Shop:** balance and MY PACKS chips, large pack art with a glow and new rows.
+  - `NEED $X` when unaffordable, a gold OPEN button and the mode strip.
+  - A LOCKED overlay that blocks clicks.
+  - Purchase and Game Pass logic unchanged.
+- **Upgrades:** the five real upgrades, each with an icon, level bar, `NOW → NEXT` effect
+  (`UiLayout.upgradeEffect`) and price / `NEED $X` / MAXED states.
+- **Settings:** GAMEPLAY (toggles) and AUDIO (10-step meters), with a saved toast after
+  the server accepts. Audio is labelled as saved-but-not-yet-used (the game has no sound).
+- **My Stands:** stand-number chips, redesigned empty and locked slots, a summary chip and
+  a gold PLACE BEST.
+- **Pack opening:** forest backdrop with motifs and gold/green buttons.
+  - Shiny/variant reveals get a light sweep and a `SHINY +2%` ribbon.
+  - Framed summary.
+  - Manual reveal, 5/15/30 cards and server rewards unchanged.
+- **Notifications:** forest toast with gold trim, a round kind badge and a pop-in.
+
+**HUD fixes:**
+- **Cause of the left gap:** the currency bar was drawn with `ScaleType.Fit` in a 4:1 box.
+  With art of a different aspect, Fit letterboxes it and leaves empty space on the left.
+- **Fix:** new `Lib/ImageBounds` reads each HUD image's pixels once through EditableImage
+  and `Logic/AlphaBounds` finds the visible rectangle and the bar's green field.
+  - The bar is cropped (ImageRectOffset/Size) to its visible art at its true aspect and
+    placed `LeftMargin` = 10 px from the left edge (was 16 + letterbox).
+  - The money text sits in the detected green field.
+- **Backpack icon:** all four icons are cropped to their visible art, so transparent
+  margins no longer shrink one. Non-square art gets up to +25 % to balance visible area;
+  `Hud.IconScale` gives manual tuning. Icons are centred on one axis.
+- **Fallbacks:** if EditableImage access is refused, Studio logs it and the config values
+  are used. Studio prints every measurement in config form, so it can be pinned in
+  `Hud.ImageBounds`.
+- Top navigation restyled (gold / green / brown).
+
+**Tests:** new `tests/unit/UiDesign.spec.luau` (10 tests):
+- the opaque bounds of icons with uneven margins, exact with coarse sampling;
+- the anti-aliasing threshold and fully transparent images;
+- currency-bar green-field detection, including when there is none;
+- fit-to-screen for desktop, phone portrait and landscape;
+- upgrade effect wording and `NEED $X` labels.
+
+VerifyPlace checks the 3 new modules. Selene's offline std gained the `Content` global.
+`SKIP_SELENE_IF_OFFLINE=1 ./scripts/check.sh`: all checks passed, 267 tests.
+**Not run in Studio** (not available in the cloud environment): no rendered screen was
+inspected; see TESTING.md §1.18.
+
 ## 2026-10-19: Custom HUD artwork (Ferret Frenzy GUI pack)
 
 - `Config/Assets.luau`: `ui.icon.settings` 130827565796014, `ui.icon.binder`

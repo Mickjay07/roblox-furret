@@ -366,6 +366,63 @@ local function showFront(column: Column, card: RevealCard, def: Types.CardDef)
 	end
 end
 
+-- Shiny (and every non-Normal variant): a light sweep across the card and a ribbon with the
+-- variant bonus above it ("SHINY +2%"). Both are round effects, cleared on the next round.
+local function variantFlourish(column: Column, card: RevealCard, def: Types.CardDef)
+	local label = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
+	local variant = Config.Variants.ById[card.Variant]
+	if not label or not variant then
+		return
+	end
+	local sheen = Create("Frame", {
+		Name = "Sheen",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = variant.Color:Lerp(Color3.new(1, 1, 1), 0.55),
+		ZIndex = 5,
+		Active = false,
+		Parent = column.flipper,
+	}, {
+		Components.corner(UDim.new(0.06, 0)),
+		Create("UIGradient", {
+			Rotation = 25,
+			Offset = Vector2.new(-1, 0),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.4, 1),
+				NumberSequenceKeypoint.new(0.5, 0.3),
+				NumberSequenceKeypoint.new(0.6, 1),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}),
+	})
+	table.insert(effects, sheen)
+	local gradient = sheen:FindFirstChildOfClass("UIGradient")
+	if gradient and not Components.reducedMotion then
+		TweenService:Create(
+			gradient,
+			TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, 2, false, 0.2),
+			{ Offset = Vector2.new(1, 0) }
+		):Play()
+	else
+		sheen.Visible = false
+	end
+	local ribbon = Components.chip(
+		label,
+		variant.Color:Lerp(Color3.new(0, 0, 0), 0.3),
+		UDim2.fromOffset(math.floor(layout.cardWidth * 0.86), 28),
+		column.frame
+	)
+	ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
+	ribbon.Position = UDim2.fromOffset(layout.cardWidth / 2, 2)
+	ribbon.ZIndex = 8
+	for _, child in ribbon:GetDescendants() do
+		if child:IsA("GuiObject") then
+			child.ZIndex = 9
+		end
+	end
+	table.insert(effects, ribbon)
+end
+
 local function fillLabels(column: Column, card: RevealCard, def: Types.CardDef)
 	local rarity = Config.Rarities.ById[def.Rarity]
 	local variantLabel = RevealStyle.variantLabel(card.Variant, card.Income, def.BaseIncome)
@@ -421,7 +478,7 @@ local function presentHidden()
 		Components.tween(column.pop, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
 	end
 	updateRoundLabel()
-	setAction("CLICK TO REVEAL", "Orange")
+	setAction("CLICK TO REVEAL", "Gold")
 	cardCatcher.Visible = true
 end
 
@@ -454,6 +511,7 @@ local function revealRound(token: number)
 		if card and def then
 			showFront(column, card, def)
 			fillLabels(column, card, def)
+			variantFlourish(column, card, def)
 			local style = RevealStyle.forRarity(def.Rarity)
 			local rarity = Config.Rarities.ById[def.Rarity]
 			local color = if rarity then rarity.Color else Theme.Colors.Muted
@@ -633,7 +691,16 @@ showSummary = function()
 	skipButton.Visible = false
 	cardCatcher.Visible = false
 	local count = #currentCards
-	stageLabel(`{count} CARDS UNLOCKED!`, 0, 54)
+	stageLabel(`{count} CARDS UNLOCKED!`, 0, 54, Theme.Colors.Gold)
+	-- Framed panel behind the summary grid.
+	Components.panel({
+		Name = "SummaryPanel",
+		Size = UDim2.new(1, -10, 1, -140),
+		Position = UDim2.fromOffset(5, 60),
+		Color = Theme.Colors.PanelDeep,
+		Trim = Theme.Colors.Gold,
+		Parent = stage,
+	})
 	local big = count <= 5
 	local tileWidth = if big then 190 else 140
 	local tileHeight = tileWidth * 1.5
@@ -644,11 +711,13 @@ showSummary = function()
 	end
 	local grid = Create("ScrollingFrame", {
 		Name = "Summary",
-		Size = UDim2.new(1, -20, 1, -150),
-		Position = UDim2.fromOffset(10, 66),
+		Size = UDim2.new(1, -24, 1, -156),
+		Position = UDim2.fromOffset(12, 68),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = Theme.Colors.Gold,
+		ZIndex = 2,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		Parent = stage,
@@ -700,7 +769,7 @@ showSummary = function()
 			end
 		end
 	end
-	setAction("CLAIM ALL", "Green")
+	setAction("CLAIM ALL", "Gold")
 end
 
 local function build()
@@ -712,14 +781,29 @@ local function build()
 		IgnoreGuiInset = true,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
-	Create("Frame", {
+	local backdrop = Create("Frame", {
 		Name = "Backdrop",
 		Active = true, -- swallows clicks so the world/HUD behind can't be used
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(8, 8, 14),
-		BackgroundTransparency = 0.25,
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+		BackgroundTransparency = 0.12,
 		Parent = screen,
+	}, {
+		-- Lighter centre, darker edges: a forest clearing behind the cards.
+		Create("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 120, 120)),
+				ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 100, 100)),
+			}),
+		}),
 	})
+	-- A few faint paw prints and leaves around the edges (static decoration).
+	Components.paw(backdrop, UDim2.fromScale(0.08, 0.84), 90, Theme.Colors.Gold, 0.9, -20)
+	Components.paw(backdrop, UDim2.fromScale(0.93, 0.18), 70, Theme.Colors.Gold, 0.9, 25)
+	Components.leaf(backdrop, UDim2.fromScale(0.05, 0.12), 120, -35, 0.75)
+	Components.leaf(backdrop, UDim2.fromScale(0.96, 0.9), 120, 145, 0.75)
 	local root = Create("Frame", {
 		Name = "Root",
 		Size = UDim2.fromOffset(ROOT_SIZE.X, ROOT_SIZE.Y),
@@ -757,7 +841,7 @@ local function build()
 	end)
 	actionButton = Components.button({
 		Text = "CLICK TO REVEAL",
-		Style = "Orange",
+		Style = "Gold",
 		Size = UDim2.fromOffset(300, 64),
 		Position = UDim2.new(0.5, 0, 1, -10),
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -774,7 +858,7 @@ local function build()
 	actionButton.ZIndex = 10
 	skipButton = Components.button({
 		Text = "SKIP TO SUMMARY",
-		Style = "Gray",
+		Style = "Brown",
 		Size = UDim2.fromOffset(220, 46),
 		Position = UDim2.new(1, -8, 0, 8),
 		AnchorPoint = Vector2.new(1, 0),

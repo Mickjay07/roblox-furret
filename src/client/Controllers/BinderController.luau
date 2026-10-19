@@ -1,5 +1,8 @@
 --!strict
--- Binder window: collection progress and discovered cards.
+-- Binder window: the player's card collection as an album. Bookmarks on the left (one per
+-- collection, with progress), the selected collection's page on the right: discovered cards
+-- show their art and copy count, undiscovered ones show the card back and their number.
+-- Everything comes from replicated data (Discovered) and Config; nothing is invented.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -19,59 +22,118 @@ local DataController = require(script.Parent.DataController)
 
 local BinderController = {}
 
+local TAB_WIDTH = 270
+
 local selected = Config.Collections.List[1].Id
-local tabs: Frame
-local header: TextLabel
-local bonus: TextLabel
-local total: TextLabel
+local tabs: ScrollingFrame
+local title: TextLabel
+local countLabel: TextLabel
+local setProgress: (number) -> ()
+local bonusChip: Frame
+local totalLabel: TextLabel
 local grid: ScrollingFrame
 
-local function render()
-	local data = DataController:Get()
-	if not data or not Windows.isOpen("Binder") then
-		return
-	end
-	for _, child in tabs:GetChildren() do
+local function clear(container: Instance)
+	for _, child in container:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
+end
+
+local function bookmark(collection: Types.CollectionDef, progress: any, isSelected: boolean)
+	local button: TextButton = Create("TextButton", {
+		Name = collection.Id,
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.new(1, -10, 0, 62),
+		BackgroundColor3 = if isSelected then Theme.Colors.PanelHeader else Theme.Colors.PanelInset,
+		LayoutOrder = collection.Order,
+		Parent = tabs,
+	}, {
+		Components.corner(UDim.new(0, 12)),
+		Create("UIStroke", {
+			Color = if isSelected then Theme.Colors.Gold else Theme.Colors.Border,
+			Thickness = if isSelected then 3 else 2,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}),
+	})
+	-- Coloured spine of the bookmark.
+	Create("Frame", {
+		Name = "Spine",
+		Size = UDim2.new(0, 10, 1, -14),
+		Position = UDim2.fromOffset(8, 7),
+		BackgroundColor3 = collection.Color,
+		Active = false,
+		Parent = button,
+	}, { Components.corner(UDim.new(1, 0)) })
+	Components.label({
+		Text = string.upper(collection.DisplayName),
+		Size = UDim2.new(1, -96, 0, 26),
+		Position = UDim2.fromOffset(28, 8),
+		Color = if isSelected then Theme.Colors.Gold else Theme.Colors.Text,
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 2,
+		Parent = button,
+	})
+	Components.label({
+		Text = `{progress.Discovered}/{progress.Total}`,
+		Size = UDim2.fromOffset(62, 24),
+		Position = UDim2.new(1, -10, 0, 9),
+		AnchorPoint = Vector2.new(1, 0),
+		Color = if progress.Complete then Theme.Colors.Cash else Theme.Colors.Muted,
+		XAlign = Enum.TextXAlignment.Right,
+		StrokeThickness = 2,
+		Parent = button,
+	})
+	local bar, set = Components.progressBar(collection.Color, UDim2.new(1, -40, 0, 9))
+	bar.Position = UDim2.new(0, 28, 1, -18)
+	bar.Parent = button
+	set(if progress.Total > 0 then progress.Discovered / progress.Total else 0)
+	button.Activated:Connect(function()
+		selected = collection.Id
+		BinderController:Render()
+	end)
+end
+
+function BinderController:Render()
+	if not Windows.isOpen("Binder") then
+		return
+	end
+	clear(tabs)
+	clear(grid)
+	local data = DataController:Get()
+	if not data then
+		Components.emptyState(grid, "LOADING YOUR BINDER...", "One moment")
+		return
+	end
 	for _, collection in Config.Collections.List do
-		local progress = Collections.progress(data, collection.Id)
-		local button = Components.button({
-			Text = `{string.upper(collection.DisplayName)}  {progress.Discovered}/{progress.Total}`,
-			Style = if collection.Id == selected then "Purple" else "Gray",
-			Size = UDim2.new(1, -8, 0, 48),
-			LayoutOrder = collection.Order,
-			Parent = tabs,
-			OnClick = function()
-				selected = collection.Id
-				render()
-			end,
-		})
-		button.BackgroundColor3 = if collection.Id == selected then collection.Color else button.BackgroundColor3
+		bookmark(collection, Collections.progress(data, collection.Id), collection.Id == selected)
 	end
 
 	local def = Config.Collections.ById[selected]
 	local progress = Collections.progress(data, selected)
-	header.Text = `{string.upper(def.DisplayName)}  {progress.Discovered}/{progress.Total}`
-	local percent = math.floor(def.CompletionIncomeBonus * 100 + 0.5)
-	bonus.Text = if progress.Complete then `COMPLETE! +{percent}% INCOME` else `COMPLETE FOR +{percent}% INCOME`
-	bonus.TextColor3 = if progress.Complete then Theme.Colors.Cash else Theme.Colors.Treats
-	local found, all = Collections.overall(data)
-	total.Text = `TOTAL {found}/{all} CARDS`
-
-	for _, child in grid:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
-		end
+	title.Text = string.upper(def.DisplayName)
+	local percent = if progress.Total > 0 then math.floor(progress.Discovered / progress.Total * 100) else 0
+	countLabel.Text = `{progress.Discovered}/{progress.Total} FOUND  ·  {percent}%`
+	setProgress(if progress.Total > 0 then progress.Discovered / progress.Total else 0)
+	local bonus = math.floor(def.CompletionIncomeBonus * 100 + 0.5)
+	if progress.Complete then
+		Components.setChipText(bonusChip, `COMPLETE! +{bonus}% INCOME`)
+		bonusChip.BackgroundColor3 = Theme.Buttons.Green[1]
+	else
+		Components.setChipText(bonusChip, `COMPLETE FOR +{bonus}% INCOME`)
+		bonusChip.BackgroundColor3 = Theme.Colors.Brown
 	end
+	local found, all = Collections.overall(data)
+	totalLabel.Text = `ALL COLLECTIONS {found}/{all}`
+
 	for _, card: Types.CardDef in CardRegistry.inCollection(selected) do
 		local entry = data.Discovered[card.Id]
 		if entry then
 			CardTile.new(card, { LayoutOrder = card.CollectionNumber, Count = entry.Count }).Parent = grid
 		else
-			CardTile.unknown(card.CollectionNumber).Parent = grid
+			CardTile.unknown(card.CollectionNumber, card.CollectionNumber).Parent = grid
 		end
 	end
 end
@@ -79,71 +141,102 @@ end
 function BinderController:Start()
 	Windows.register("Binder", {
 		Title = "Binder",
-		Accent = "Purple",
-		Size = Vector2.new(940, 560),
+		Icon = "ui.icon.binder",
+		Size = Vector2.new(1000, 620),
 		Build = function(content: Frame)
-			tabs = Create("Frame", {
+			local tabPanel = Components.panel({
+				Name = "Bookmarks",
+				Size = UDim2.new(0, TAB_WIDTH, 1, 0),
+				Parent = content,
+			})
+			tabs = Create("ScrollingFrame", {
 				Name = "Tabs",
-				Size = UDim2.new(0, 300, 1, 0),
+				Size = UDim2.new(1, -8, 1, -12),
+				Position = UDim2.fromOffset(6, 6),
 				BackgroundTransparency = 1,
-			}, {
-				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }),
-			})
-			tabs.Parent = content
-			header = Components.label({
-				Text = "",
-				Size = UDim2.new(1, -320, 0, 34),
-				Position = UDim2.fromOffset(316, 0),
-				XAlign = Enum.TextXAlignment.Left,
-				Parent = content,
-			})
-			bonus = Components.label({
-				Text = "",
-				Size = UDim2.new(0.5, -170, 0, 24),
-				Position = UDim2.fromOffset(316, 40),
-				XAlign = Enum.TextXAlignment.Left,
-				StrokeThickness = 2,
-				Parent = content,
-			})
-			total = Components.label({
-				Text = "",
-				Size = UDim2.new(0.5, -170, 0, 24),
-				Position = UDim2.new(1, 0, 0, 40),
-				AnchorPoint = Vector2.new(1, 0),
-				XAlign = Enum.TextXAlignment.Right,
-				Color = Theme.Colors.Muted,
-				StrokeThickness = 2,
-				Parent = content,
-			})
-			grid = Create("ScrollingFrame", {
-				Name = "Grid",
-				Size = UDim2.new(1, -316, 1, -76),
-				Position = UDim2.fromOffset(316, 76),
-				BackgroundColor3 = Theme.Colors.PanelInset,
 				BorderSizePixel = 0,
-				ScrollBarThickness = 8,
+				ScrollBarThickness = 6,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
 				CanvasSize = UDim2.new(),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				Parent = content,
+				Parent = tabPanel,
 			}, {
-				Components.corner(UDim.new(0, 12)),
+				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }),
+				Create("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4) }),
+			})
+
+			-- The album page.
+			local page = Components.panel({
+				Name = "Page",
+				Size = UDim2.new(1, -TAB_WIDTH - 12, 1, 0),
+				Position = UDim2.fromScale(1, 0),
+				AnchorPoint = Vector2.new(1, 0),
+				Color = Theme.Colors.PanelDeep,
+				Trim = Theme.Colors.Brown,
+				Parent = content,
+			})
+			title = Components.label({
+				Text = "",
+				Size = UDim2.new(0.55, 0, 0, 36),
+				Position = UDim2.fromOffset(18, 12),
+				Color = Theme.Colors.Gold,
+				XAlign = Enum.TextXAlignment.Left,
+				StrokeThickness = 3,
+				Parent = page,
+			})
+			totalLabel = Components.label({
+				Text = "",
+				Size = UDim2.new(0.42, 0, 0, 22),
+				Position = UDim2.new(1, -18, 0, 18),
+				AnchorPoint = Vector2.new(1, 0),
+				Color = Theme.Colors.Muted,
+				XAlign = Enum.TextXAlignment.Right,
+				StrokeThickness = 1.5,
+				Parent = page,
+			})
+			local bar
+			bar, setProgress = Components.progressBar(Theme.Colors.Gold, UDim2.new(0.5, -18, 0, 14))
+			bar.Position = UDim2.fromOffset(18, 58)
+			bar.Parent = page
+			countLabel = Components.label({
+				Text = "",
+				Size = UDim2.new(0.5, -40, 0, 20),
+				Position = UDim2.new(0.5, 12, 0, 55),
+				Color = Theme.Colors.Text,
+				XAlign = Enum.TextXAlignment.Left,
+				StrokeThickness = 2,
+				Parent = page,
+			})
+			bonusChip = Components.chip("", Theme.Colors.Brown, UDim2.fromOffset(280, 28), page)
+			bonusChip.Position = UDim2.fromOffset(18, 82)
+			grid = Create("ScrollingFrame", {
+				Name = "Grid",
+				Size = UDim2.new(1, -16, 1, -128),
+				Position = UDim2.fromOffset(8, 122),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ScrollBarThickness = 8,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
+				CanvasSize = UDim2.new(),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				Parent = page,
+			}, {
 				Create("UIGridLayout", {
-					CellSize = UDim2.fromOffset(130, 182),
+					CellSize = UDim2.fromOffset(120, 180),
 					CellPadding = UDim2.fromOffset(12, 12),
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
-				Create("UIPadding", {
-					PaddingTop = UDim.new(0, 12),
-					PaddingLeft = UDim.new(0, 12),
-					PaddingRight = UDim.new(0, 12),
-				}),
+				Create("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 12) }),
 			})
-			return render
+			return function()
+				BinderController:Render()
+			end
 		end,
 	})
 	DataController.Changed:Connect(function(changed)
 		if changed == "Discovered" or changed == "*" then
-			render()
+			BinderController:Render()
 		end
 	end)
 end

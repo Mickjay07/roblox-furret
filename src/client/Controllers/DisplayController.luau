@@ -1,5 +1,6 @@
 --!strict
--- "My Stands" window: display stands that earn income, plus Place Best.
+-- "My Stands" window: display stands that earn income, plus Place Best and Collect All.
+-- Each stand shows its number, its card (or an empty / locked slot) and uncollected cash.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -24,7 +25,7 @@ local BackpackController = require(script.Parent.BackpackController)
 local DisplayController = {}
 
 local grid: ScrollingFrame
-local summary: TextLabel
+local summary: Frame
 -- Per-stand collect buttons, updated in place as earnings accrue (no grid rebuild).
 local collectButtons: { [string]: TextButton } = {}
 
@@ -56,25 +57,53 @@ local function addCollectButton(cell: GuiObject, slot: number)
 	})
 end
 
+local function standNumber(parent: GuiObject, slot: number)
+	local chip = Components.chip(`#{slot}`, Theme.Colors.BrownDark, UDim2.fromOffset(46, 24), parent)
+	chip.Position = UDim2.fromOffset(-6, -8)
+	chip.ZIndex = 6
+	for _, child in chip:GetDescendants() do
+		if child:IsA("GuiObject") then
+			child.ZIndex = 7
+		end
+	end
+end
+
 local function emptySlot(order: number, text: string, locked: boolean): TextButton
 	local slot: TextButton = Create("TextButton", {
 		Name = "Slot" .. order,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = if locked then Theme.Colors.Border else Theme.Colors.PanelHeader,
+		BackgroundColor3 = if locked then Theme.Colors.PanelDeep else Theme.Colors.PanelInset,
+		BackgroundTransparency = if locked then 0.2 else 0,
 		LayoutOrder = order,
 	}, {
-		Components.corner(UDim.new(0, 12)),
-		Components.stroke(Theme.Colors.Border, 3),
+		Components.corner(UDim.new(0, 14)),
+		Create("UIStroke", {
+			Color = if locked then Theme.Colors.Border else Theme.Colors.GoldDark,
+			Thickness = 3,
+			Transparency = if locked then 0 else 0.2,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}),
 	})
 	Components.label({
-		Text = text,
-		Size = UDim2.fromScale(0.8, 0.2),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Text = if locked then "LOCKED" else "+",
+		Size = UDim2.fromScale(if locked then 0.7 else 0.4, if locked then 0.14 else 0.3),
+		Position = UDim2.fromScale(0.5, 0.36),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = Theme.Colors.Muted,
+		Color = if locked then Theme.Colors.Muted else Theme.Colors.Gold,
+		StrokeThickness = 3,
 		Parent = slot,
 	})
+	local hint = Components.label({
+		Text = text,
+		Size = UDim2.fromScale(0.86, 0.2),
+		Position = UDim2.fromScale(0.5, 0.6),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Color = Theme.Colors.Muted,
+		StrokeThickness = 1.5,
+		Parent = slot,
+	})
+	hint.TextWrapped = true
 	return slot
 end
 
@@ -104,9 +133,11 @@ local function render()
 				end,
 			})
 			tile.Parent = grid
+			standNumber(tile, slot)
 			addCollectButton(tile, slot)
 		else
-			local empty = emptySlot(slot, "EMPTY", false)
+			local empty = emptySlot(slot, "EMPTY STAND - TAP TO PLACE", false)
+			standNumber(empty, slot)
 			empty.Activated:Connect(function()
 				BackpackController:OpenWith(nil)
 			end)
@@ -114,12 +145,12 @@ local function render()
 			addCollectButton(empty, slot)
 		end
 	end
-	local locked = emptySlot(slots + 1, "BUY MORE IN UPGRADES", true)
+	local locked = emptySlot(slots + 1, "MORE STANDS IN UPGRADES", true)
 	locked.Activated:Connect(function()
 		Windows.open("Upgrades")
 	end)
 	locked.Parent = grid
-	summary.Text = `{slots} STANDS  |  +{Format.short(Economy.totalIncome(data), 1e6)} CASH/S`
+	Components.setChipText(summary, `{slots} STANDS  ·  +{Format.short(Economy.totalIncome(data), 1e6)} CASH/S`)
 	updatePending()
 end
 
@@ -129,13 +160,7 @@ function DisplayController:Start()
 		Accent = "Blue",
 		Size = Vector2.new(900, 560),
 		Build = function(content: Frame)
-			summary = Components.label({
-				Text = "",
-				Size = UDim2.new(1, -460, 0, 40),
-				XAlign = Enum.TextXAlignment.Left,
-				Color = Theme.Colors.Cash,
-				Parent = content,
-			})
+			summary = Components.chip("", Theme.Colors.BrownDark, UDim2.fromOffset(380, 40), content)
 			Components.button({
 				Text = "COLLECT ALL",
 				Style = "Green",
@@ -149,7 +174,7 @@ function DisplayController:Start()
 			})
 			Components.button({
 				Text = "PLACE BEST",
-				Style = "Orange",
+				Style = "Gold",
 				Size = UDim2.fromOffset(220, 48),
 				Position = UDim2.new(1, 0, 0, -4),
 				AnchorPoint = Vector2.new(1, 0),
@@ -158,25 +183,35 @@ function DisplayController:Start()
 					Request(Remotes.Functions.PlaceBest)
 				end,
 			})
-			grid = Create("ScrollingFrame", {
-				Name = "Grid",
+			local gridPanel = Components.panel({
+				Name = "GridPanel",
 				Size = UDim2.new(1, 0, 1, -56),
 				Position = UDim2.fromOffset(0, 56),
-				BackgroundColor3 = Theme.Colors.PanelInset,
+				Parent = content,
+			})
+			grid = Create("ScrollingFrame", {
+				Name = "Grid",
+				Size = UDim2.new(1, -8, 1, -8),
+				Position = UDim2.fromOffset(4, 4),
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				ScrollBarThickness = 8,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
 				CanvasSize = UDim2.new(),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				Parent = content,
+				Parent = gridPanel,
 			}, {
-				Components.corner(UDim.new(0, 12)),
 				Create("UIGridLayout", {
-					CellSize = UDim2.fromOffset(150, 210),
+					CellSize = UDim2.fromOffset(140, 210),
 					CellPadding = UDim2.fromOffset(14, 14),
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
-				Create("UIPadding", { PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12) }),
+				Create("UIPadding", {
+					PaddingTop = UDim.new(0, 16),
+					PaddingBottom = UDim.new(0, 12),
+					PaddingLeft = UDim.new(0, 10),
+				}),
 			})
 			return render
 		end,

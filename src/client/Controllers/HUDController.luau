@@ -23,6 +23,7 @@ local Windows = require(UI.Windows)
 local DataController = require(script.Parent.DataController)
 local NotificationController = require(script.Parent.NotificationController)
 local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
+local ImageBounds = require(script.Parent.Parent.Lib.ImageBounds)
 local Request = require(script.Parent.Parent.Lib.Request)
 
 local HUDController = {}
@@ -30,9 +31,9 @@ local HUDController = {}
 -- Navigation entries: window name, label, button style. Windows that are not registered
 -- (features not built yet) show a "coming soon" notice instead of opening.
 local TOP_NAV = {
-	{ window = "Packs", text = "PACKS", style = "Green" },
-	{ window = "Display", text = "MY STANDS", style = "Blue" },
-	{ window = "__home", text = "MY PLOT", style = "Orange" },
+	{ window = "Packs", text = "PACKS", style = "Gold" },
+	{ window = "Display", text = "MY STANDS", style = "Green" },
+	{ window = "__home", text = "MY PLOT", style = "Brown" },
 }
 -- `icon` is a Config.Assets key for the custom HUD art; without an uploaded image the entry
 -- falls back to a text button.
@@ -106,6 +107,7 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 		ZIndex = 1,
 		Parent = row,
 	})
+	local art = row:FindFirstChild("Art") :: ImageLabel
 	local label: TextLabel = Create("TextLabel", {
 		Name = "Cash",
 		Text = "0",
@@ -133,6 +135,24 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
 		}),
 	})
+	-- Once the art's real pixels are known: crop away transparent margins (so the bar starts
+	-- right at the panel's left edge instead of being letterboxed), use its true aspect, and
+	-- put the text exactly on the detected green field.
+	ImageBounds.get("ui.currency_bar", image, true, function(measurement)
+		if not measurement or not row.Parent then
+			return
+		end
+		ImageBounds.crop(art, measurement)
+		row.Size = UDim2.fromOffset(layout.Width, layout.Width / ImageBounds.aspect(measurement))
+		local green = measurement.Green
+		if green then
+			local width = 1 - green.Left - green.Right
+			local height = 1 - green.Top - green.Bottom
+			-- Keep the text slightly inside the green field.
+			label.Position = UDim2.fromScale(green.Left + width * 0.04, green.Top + height * 0.12)
+			label.Size = UDim2.fromScale(width * 0.92, height * 0.76)
+		end
+	end)
 	return row, label
 end
 
@@ -140,12 +160,12 @@ local function buildStats(gui: ScreenGui)
 	local barLayout = Config.Visuals.Hud.CurrencyBar
 	local hasBar = CardArt.image("ui.currency_bar") ~= nil
 	local width = if hasBar then math.max(320, barLayout.Width) else 320
-	local cashHeight = if hasBar then barLayout.Width / barLayout.Aspect else 52
 	local panel = Create("Frame", {
 		Name = "Stats",
-		-- Rows: cash, income (26), treats (40), level (40), collect (52), 6 px gaps.
-		Size = UDim2.fromOffset(width, cashHeight + 26 + 40 + 40 + 52 + 4 * 6),
-		Position = UDim2.new(0, 16, 0.5, 0),
+		-- Height follows the rows (the currency bar's height depends on the measured art).
+		Size = UDim2.fromOffset(width, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.new(0, Config.Visuals.Hud.LeftMargin, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Parent = gui,
@@ -196,7 +216,7 @@ local function buildStats(gui: ScreenGui)
 		Size = UDim2.fromOffset(200, 40),
 		BackgroundColor3 = Theme.Colors.Panel,
 		Parent = levelRow,
-	}, { Components.corner(UDim.new(0, 10)), Components.stroke(Theme.Colors.Border, 3) })
+	}, { Components.corner(UDim.new(0, 12)), Components.stroke(Theme.Colors.Gold, 2.5) })
 	local levelText = Components.label({
 		Text = "LV 1",
 		Size = UDim2.new(1, -16, 0, 20),
@@ -228,7 +248,7 @@ local function buildStats(gui: ScreenGui)
 			collect,
 			if pending > 0 then `COLLECT ${Format.short(pending)}` else "NOTHING TO COLLECT"
 		)
-		Components.setButtonStyle(collect, if pending > 0 then "Green" else "Gray")
+		Components.setButtonStyle(collect, if pending > 0 then "Gold" else "Gray")
 	end
 
 	local function refreshCurrency(data: Types.PlayerData)
@@ -286,11 +306,14 @@ end
 local function buildRightRail(gui: ScreenGui)
 	local iconSize = Config.Visuals.Hud.IconSize
 	local captions = Config.Visuals.Hud.ShowCaptions
+	-- Icons may grow up to 25% to balance their visible area (see below).
+	local maxIcon = math.floor(iconSize * 1.25)
 	-- Each slot: the icon (or a 76 px text button) plus room for its caption.
 	local slot = math.max(76, iconSize + (if captions then math.floor(iconSize * 0.24) else 0))
+	local railWidth = math.max(112, maxIcon)
 	local rail = Create("Frame", {
 		Name = "RightRail",
-		Size = UDim2.fromOffset(math.max(112, iconSize), #RIGHT_NAV * (slot + 10)),
+		Size = UDim2.fromOffset(railWidth, #RIGHT_NAV * (slot + 10)),
 		Position = UDim2.new(1, -16, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
@@ -310,7 +333,7 @@ local function buildRightRail(gui: ScreenGui)
 			-- Wrapper reserves the caption's height so the list layout spaces icons evenly.
 			local holder = Create("Frame", {
 				Name = entry.window,
-				Size = UDim2.fromOffset(math.max(112, iconSize), slot),
+				Size = UDim2.fromOffset(railWidth, slot),
 				BackgroundTransparency = 1,
 				LayoutOrder = i,
 				Parent = rail,
@@ -325,8 +348,25 @@ local function buildRightRail(gui: ScreenGui)
 					navigate(entry.window)
 				end,
 			})
-			button.AnchorPoint = Vector2.new(1, 0)
-			button.Position = UDim2.fromScale(1, 0)
+			-- Centre each icon on the same vertical axis so the column lines up.
+			button.AnchorPoint = Vector2.new(0.5, 0.5)
+			button.Position = UDim2.new(0.5, 0, 0, iconSize / 2)
+			local manual = Config.Visuals.Hud.IconScale[entry.icon] or 1
+			local function applySize(balance: number)
+				local size = math.min(maxIcon, math.floor(iconSize * balance * manual))
+				button.Size = UDim2.fromOffset(size, size)
+			end
+			applySize(1)
+			-- Crop to the visible art, then give wide or tall art a little more room so its
+			-- visible area matches the square icons (Fit shrinks a non-square image).
+			ImageBounds.get(entry.icon, image, false, function(measurement)
+				if not measurement or not button.Parent then
+					return
+				end
+				ImageBounds.crop(button, measurement)
+				local aspect = ImageBounds.aspect(measurement)
+				applySize(math.clamp(math.sqrt(math.max(aspect, 1 / aspect)), 1, 1.25))
+			end)
 		else
 			ArtDiagnostics.fallback("HUD", entry.icon)
 			Components.button({
@@ -347,6 +387,8 @@ function HUDController:Start()
 	local gui = Create("ScreenGui", {
 		Name = "HUD",
 		ResetOnSpawn = false,
+		-- Keep the HUD clear of notches, rounded corners and the home indicator on phones.
+		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})

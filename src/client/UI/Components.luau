@@ -110,7 +110,7 @@ export type ButtonProps = {
 	OnClick: (() -> ())?,
 }
 
--- Pill button with a darker border, light gradient and press bounce.
+-- Chunky rounded button: coloured fill, darker border, a soft top shine and press bounce.
 function Components.button(props: ButtonProps): TextButton
 	local palette = Theme.Buttons[props.Style or "Green"] or Theme.Buttons.Green
 	local scale = Create("UIScale", { Scale = 1 })
@@ -128,10 +128,21 @@ function Components.button(props: ButtonProps): TextButton
 		Components.stroke(palette[2], 3),
 		Create("UIGradient", {
 			Rotation = 90,
-			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 205)),
+			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 196, 196)),
 		}),
 		scale,
 	})
+	-- Glossy highlight on the upper half (decorative; never takes input).
+	Create("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(1, -10, 0.42, 0),
+		Position = UDim2.fromOffset(5, 3),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.8,
+		BorderSizePixel = 0,
+		Active = false,
+		Parent = button,
+	}, { Components.corner(UDim.new(0, 10)) })
 	Components.label({
 		Name = "Text",
 		Text = props.Text,
@@ -226,6 +237,267 @@ function Components.iconButton(props: IconButtonProps): ImageButton
 	return button
 end
 
+export type PanelProps = {
+	Name: string?,
+	Size: UDim2?,
+	Position: UDim2?,
+	AnchorPoint: Vector2?,
+	Color: Color3?,
+	Trim: Color3?,
+	LayoutOrder: number?,
+	Parent: Instance?,
+}
+
+-- Inset surface used inside windows: deep green with a thin gold trim and a soft gradient.
+function Components.panel(props: PanelProps): Frame
+	return Create("Frame", {
+		Name = props.Name or "Panel",
+		Size = props.Size or UDim2.fromScale(1, 1),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundColor3 = props.Color or Theme.Colors.PanelInset,
+		LayoutOrder = props.LayoutOrder or 0,
+		Parent = props.Parent,
+	}, {
+		Components.corner(UDim.new(0, 14)),
+		Create("UIStroke", {
+			Color = props.Trim or Theme.Colors.GoldDark,
+			Thickness = 2,
+			Transparency = 0.25,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}),
+		Create("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 210, 200)),
+		}),
+	})
+end
+
+-- Small rounded tag, e.g. "UNCOMMON", "x3", "OWNED".
+function Components.chip(text: string, color: Color3, size: UDim2?, parent: Instance?): Frame
+	local chip = Create("Frame", {
+		Name = "Chip",
+		Size = size or UDim2.fromOffset(110, 26),
+		BackgroundColor3 = color,
+		Parent = parent,
+	}, {
+		Components.corner(UDim.new(1, 0)),
+		Components.stroke(color:Lerp(Color3.new(0, 0, 0), 0.55), 2),
+	})
+	Components.label({
+		Name = "Text",
+		Text = text,
+		Size = UDim2.new(1, -14, 0.78, 0),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		StrokeThickness = 2,
+		Parent = chip,
+	})
+	return chip
+end
+
+function Components.setChipText(chip: Frame, text: string)
+	local label = chip:FindFirstChild("Text")
+	if label and label:IsA("TextLabel") then
+		label.Text = text
+	end
+end
+
+-- A paw print (one pad, four toes) drawn from circles; decoration only.
+function Components.paw(
+	parent: Instance,
+	position: UDim2,
+	size: number,
+	color: Color3,
+	transparency: number,
+	rotation: number?
+): Frame
+	local paw = Create("Frame", {
+		Name = "Paw",
+		Size = UDim2.fromOffset(size, size),
+		Position = position,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Rotation = rotation or 0,
+		BackgroundTransparency = 1,
+		Active = false,
+		Parent = parent,
+	})
+	local function dot(x: number, y: number, w: number, h: number)
+		Create("Frame", {
+			Size = UDim2.fromScale(w, h),
+			Position = UDim2.fromScale(x, y),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = color,
+			BackgroundTransparency = transparency,
+			BorderSizePixel = 0,
+			Parent = paw,
+		}, { Components.corner(UDim.new(1, 0)) })
+	end
+	dot(0.5, 0.68, 0.5, 0.42)
+	dot(0.18, 0.4, 0.2, 0.26)
+	dot(0.38, 0.2, 0.2, 0.26)
+	dot(0.62, 0.2, 0.2, 0.26)
+	dot(0.82, 0.4, 0.2, 0.26)
+	return paw
+end
+
+-- A single leaf (rotated rounded oval with a lighter tip); decoration only.
+function Components.leaf(parent: Instance, position: UDim2, size: number, rotation: number, transparency: number): Frame
+	return Create("Frame", {
+		Name = "Leaf",
+		Size = UDim2.fromOffset(size, size * 0.5),
+		Position = position,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Rotation = rotation,
+		BackgroundColor3 = Theme.Colors.Leaf,
+		BackgroundTransparency = transparency,
+		BorderSizePixel = 0,
+		Active = false,
+		Parent = parent,
+	}, {
+		Components.corner(UDim.new(1, 0)),
+		Create("UIGradient", {
+			Color = ColorSequence.new(
+				Theme.Colors.Leaf:Lerp(Color3.new(0, 0, 0), 0.25),
+				Theme.Colors.Leaf:Lerp(Color3.new(1, 1, 1), 0.3)
+			),
+		}),
+	})
+end
+
+-- Large section heading in gold, left-aligned.
+function Components.sectionTitle(text: string, size: UDim2?, parent: Instance?, layoutOrder: number?): TextLabel
+	return Components.label({
+		Name = "Section",
+		Text = text,
+		Size = size or UDim2.new(1, 0, 0, 28),
+		Color = Theme.Colors.Gold,
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 2.5,
+		LayoutOrder = layoutOrder,
+		Parent = parent,
+	})
+end
+
+-- Centred empty / loading state with an optional action button.
+function Components.emptyState(
+	parent: Instance,
+	title: string,
+	body: string?,
+	action: string?,
+	onAction: (() -> ())?
+): Frame
+	local holder = Create("Frame", {
+		Name = "EmptyState",
+		Size = UDim2.new(1, 0, 0, 220),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	Components.paw(holder, UDim2.new(0.5, 0, 0, 40), 64, Theme.Colors.Gold, 0.35, -12)
+	Components.label({
+		Text = title,
+		Size = UDim2.new(0.9, 0, 0, 38),
+		Position = UDim2.new(0.5, 0, 0, 82),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Color = Theme.Colors.Gold,
+		StrokeThickness = 3,
+		Parent = holder,
+	})
+	if body then
+		Components.label({
+			Text = body,
+			Size = UDim2.new(0.9, 0, 0, 24),
+			Position = UDim2.new(0.5, 0, 0, 124),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Color = Theme.Colors.Muted,
+			StrokeThickness = 1.5,
+			Parent = holder,
+		})
+	end
+	if action and onAction then
+		Components.button({
+			Text = action,
+			Style = "Gold",
+			Size = UDim2.fromOffset(220, 50),
+			Position = UDim2.new(0.5, 0, 0, 160),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Parent = holder,
+			OnClick = onAction,
+		})
+	end
+	return holder
+end
+
+-- Rounded search field. `onChanged` runs with the current text on every edit.
+function Components.searchBox(placeholder: string, size: UDim2, parent: Instance, onChanged: (string) -> ()): TextBox
+	local box: TextBox = Create("TextBox", {
+		Name = "Search",
+		Size = size,
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+		Text = "",
+		PlaceholderText = placeholder,
+		PlaceholderColor3 = Theme.Colors.Muted,
+		TextColor3 = Theme.Colors.Text,
+		Font = Theme.Font,
+		TextScaled = true,
+		ClearTextOnFocus = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}, {
+		Components.corner(UDim.new(1, 0)),
+		Components.stroke(Theme.Colors.GoldDark, 2),
+		Create("UIPadding", {
+			PaddingLeft = UDim.new(0, 16),
+			PaddingRight = UDim.new(0, 12),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+		}),
+	})
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		onChanged(box.Text)
+	end)
+	return box
+end
+
+-- Pill on/off switch. Returns the button and a setter for its displayed state.
+function Components.toggle(size: UDim2, parent: Instance, onClick: () -> ()): (TextButton, (boolean) -> ())
+	local button: TextButton = Create("TextButton", {
+		Name = "Toggle",
+		Text = "",
+		AutoButtonColor = false,
+		Size = size,
+		BackgroundColor3 = Theme.Buttons.Gray[1],
+		Parent = parent,
+	}, { Components.corner(UDim.new(1, 0)), Components.stroke(Theme.Colors.Border, 3) })
+	local knob = Create("Frame", {
+		Name = "Knob",
+		Size = UDim2.new(0, size.Y.Offset - 10, 1, -10),
+		Position = UDim2.new(0, 5, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Theme.Colors.Text,
+		Parent = button,
+	}, { Components.corner(UDim.new(1, 0)), Components.stroke(Theme.Colors.Border, 2) })
+	local label = Components.label({
+		Text = "OFF",
+		Size = UDim2.new(0.5, 0, 0.6, 0),
+		Position = UDim2.fromScale(0.72, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		StrokeThickness = 2,
+		Parent = button,
+	})
+	button.Activated:Connect(onClick)
+	local function set(on: boolean)
+		button.BackgroundColor3 = if on then Theme.Buttons.Green[1] else Theme.Buttons.Gray[1]
+		label.Text = if on then "ON" else "OFF"
+		label.Position = UDim2.fromScale(if on then 0.3 else 0.72, 0.5)
+		Components.tween(knob, 0.15, {
+			Position = if on then UDim2.new(1, -5, 0.5, 0) else UDim2.new(0, 5, 0.5, 0),
+			AnchorPoint = if on then Vector2.new(1, 0.5) else Vector2.new(0, 0.5),
+		})
+	end
+	return button, set
+end
+
 function Components.setButtonText(button: TextButton, text: string)
 	local label = button:FindFirstChild("Text")
 	if label and label:IsA("TextLabel") then
@@ -249,8 +521,8 @@ function Components.badge(text: string, color: Color3, size: UDim2?): Frame
 		Size = size or UDim2.fromOffset(44, 44),
 		BackgroundColor3 = color,
 	}, {
-		Components.corner(UDim.new(0, 10)),
-		Components.stroke(Theme.Colors.Border, 3),
+		Components.corner(UDim.new(0, 12)),
+		Components.stroke(Theme.Colors.GoldDark, 3),
 		Create("UIGradient", {
 			Rotation = 90,
 			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)),
@@ -276,8 +548,8 @@ function Components.progressBar(color: Color3, size: UDim2?): (Frame, (number) -
 	local frame = Create("Frame", {
 		Name = "ProgressBar",
 		Size = size or UDim2.new(1, 0, 0, 12),
-		BackgroundColor3 = Theme.Colors.PanelInset,
-	}, { Components.corner(UDim.new(1, 0)), Components.stroke(Theme.Colors.Border, 2), fill })
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+	}, { Components.corner(UDim.new(1, 0)), Components.stroke(Theme.Colors.GoldDark, 2), fill })
 	return frame,
 		function(alpha: number)
 			Components.tween(fill, 0.2, { Size = UDim2.fromScale(math.clamp(alpha, 0, 1), 1) })

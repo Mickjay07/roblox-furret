@@ -1,5 +1,7 @@
 --!strict
--- Backpack window: every owned card, sortable, with actions for the selected card.
+-- Backpack window: every owned card (server data), searchable and sortable, with a details
+-- panel and the actions the server supports for the selected card (place / remove, favourite,
+-- sell). Opened from the HUD, from My Stands, or from a physical stand to pick its card.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -10,6 +12,7 @@ local Types = require(Shared.Types)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
 local Inventory = require(Shared.Logic.Inventory)
+local RevealStyle = require(Shared.Logic.RevealStyle)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
@@ -32,23 +35,46 @@ local SORTS: { { key: string, label: string } } = {
 	{ key = "Income", label = "BEST" },
 }
 
+local DETAIL_WIDTH = 304
+
 local sortKey = "Recent"
+local query = ""
 local selectedId: string? = nil
 -- Set when the backpack was opened from a physical stand: the main action places the selected
 -- card on that stand (through the validated PlaceCard remote).
 local targetSlot: number? = nil
+
+local grid: ScrollingFrame
+local detail: Frame
+local capacityChip: Frame
+local sortButtons: { [string]: TextButton } = {}
 
 local function rarityOrder(def: Types.CardDef): number
 	local rarity = Config.Rarities.ById[def.Rarity]
 	return if rarity then rarity.Order else 0
 end
 
-local function sortedEntries(data: Types.PlayerData): { Entry }
+local function matches(entry: Entry): boolean
+	if query == "" then
+		return true
+	end
+	local needle = string.lower(query)
+	local haystack =
+		string.lower(`{entry.def.Name} {entry.def.Description} {entry.def.Rarity} {entry.instance.Variant}`)
+	return string.find(haystack, needle, 1, true) ~= nil
+end
+
+local function sortedEntries(data: Types.PlayerData): ({ Entry }, number)
 	local entries: { Entry } = {}
+	local total = 0
 	for id, instance in data.Cards do
 		local def = CardRegistry.get(instance.CardId)
 		if def then
-			table.insert(entries, { id = id, instance = instance, def = def, income = Economy.cardIncome(instance) })
+			total += 1
+			local entry = { id = id, instance = instance, def = def, income = Economy.cardIncome(instance) }
+			if matches(entry) then
+				table.insert(entries, entry)
+			end
 		end
 	end
 	table.sort(entries, function(a, b)
@@ -67,12 +93,8 @@ local function sortedEntries(data: Types.PlayerData): { Entry }
 		end
 		return a.id > b.id
 	end)
-	return entries
+	return entries, total
 end
-
-local grid: ScrollingFrame
-local detail: Frame
-local capacityLabel: TextLabel
 
 local function clear(container: Instance)
 	for _, child in container:GetChildren() do
@@ -82,64 +104,166 @@ local function clear(container: Instance)
 	end
 end
 
+local function copiesOf(data: Types.PlayerData, cardId: string): number
+	local count = 0
+	for _, instance in data.Cards do
+		if instance.CardId == cardId then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function statRow(parent: Instance, order: number, name: string, value: string, color: Color3?)
+	local row = Create("Frame", {
+		Name = name,
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	Components.label({
+		Text = name,
+		Size = UDim2.fromScale(0.5, 1),
+		Color = Theme.Colors.Muted,
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 1.5,
+		Parent = row,
+	})
+	Components.label({
+		Text = value,
+		Size = UDim2.fromScale(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0),
+		Color = color or Theme.Colors.Text,
+		XAlign = Enum.TextXAlignment.Right,
+		StrokeThickness = 2,
+		Parent = row,
+	})
+end
+
 local function renderDetail(data: Types.PlayerData)
 	clear(detail)
 	local instance = if selectedId then data.Cards[selectedId] else nil
 	local def = if instance then CardRegistry.get(instance.CardId) else nil
 	if not selectedId or not instance or not def then
 		selectedId = nil
+		Components.paw(detail, UDim2.fromScale(0.5, 0.36), 70, Theme.Colors.Gold, 0.55, -10)
 		Components.label({
-			Text = "TAP A CARD",
-			Size = UDim2.new(1, -20, 0, 36),
-			Position = UDim2.fromScale(0.5, 0.4),
+			Text = if targetSlot then `PICK A CARD FOR STAND #{targetSlot}` else "TAP A CARD",
+			Size = UDim2.new(1, -24, 0, 32),
+			Position = UDim2.fromScale(0.5, 0.52),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Color = Theme.Colors.Gold,
+			Parent = detail,
+		})
+		Components.label({
+			Text = "to see its details",
+			Size = UDim2.new(1, -24, 0, 20),
+			Position = UDim2.fromScale(0.5, 0.6),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Color = Theme.Colors.Muted,
+			StrokeThickness = 1.5,
 			Parent = detail,
 		})
 		return
 	end
 	local id = selectedId :: string
-	local onStand = Inventory.displaySlotOf(data, id) ~= nil
-	local tile = CardTile.new(def, {
-		Variant = instance.Variant,
-		Income = Economy.cardIncome(instance),
-		Favorite = instance.Favorite,
-		OnStand = onStand,
-	})
-	tile.Size = UDim2.fromOffset(130, 182)
-	tile.Position = UDim2.new(0.5, 0, 0, 8)
-	tile.AnchorPoint = Vector2.new(0.5, 0)
-	tile.Parent = detail
+	local standSlot = Inventory.displaySlotOf(data, id)
+	local onStand = standSlot ~= nil
+	local income = Economy.cardIncome(instance)
+	local rarity = Config.Rarities.ById[def.Rarity]
+	local rarityColor = if rarity then rarity.Color else Theme.Colors.Muted
 
-	local description = Components.label({
-		Text = def.Description,
-		Size = UDim2.new(1, -20, 0, 40),
-		Position = UDim2.new(0.5, 0, 0, 196),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Color = Theme.Colors.Muted,
-		StrokeThickness = 1.5,
-		Parent = detail,
-	})
-	description.TextWrapped = true
-
-	local saleValue = Economy.cardSaleValue(data, instance)
-	local actions = Create("Frame", {
-		Name = "Actions",
-		Size = UDim2.new(1, -20, 0, 160),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		AnchorPoint = Vector2.new(0.5, 1),
+	local stack = Create("Frame", {
+		Name = "Stack",
+		Size = UDim2.new(1, -24, 1, -16),
+		Position = UDim2.fromOffset(12, 10),
 		BackgroundTransparency = 1,
 		Parent = detail,
 	}, {
-		Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }),
+		Create("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 6),
+		}),
 	})
-	local size = UDim2.new(1, 0, 0, 46)
+
+	-- The card itself (full art when uploaded, with its own tags).
+	local tile = CardTile.new(def, {
+		Variant = instance.Variant,
+		Income = income,
+		Favorite = instance.Favorite,
+		OnStand = onStand,
+	})
+	-- 104 x 156: stack total = 156 + 28 + 26 + 94 + 98 + 4 x 6 gaps = 426 px, which fits the
+	-- 430 px details column.
+	tile.Size = UDim2.fromOffset(104, 156)
+	tile.LayoutOrder = 1
+	tile.Parent = stack
+
+	Components.label({
+		Text = string.upper(def.Name),
+		Size = UDim2.new(1, 0, 0, 28),
+		Color = Theme.Colors.Gold,
+		StrokeThickness = 3,
+		LayoutOrder = 2,
+		Parent = stack,
+	})
+	local chips = Create("Frame", {
+		Name = "Chips",
+		Size = UDim2.new(1, 0, 0, 26),
+		BackgroundTransparency = 1,
+		LayoutOrder = 3,
+		Parent = stack,
+	}, {
+		Create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 6),
+		}),
+	})
+	Components.chip(if rarity then rarity.DisplayName else def.Rarity, rarityColor, UDim2.fromOffset(118, 26), chips)
+	local variantLabel = RevealStyle.variantLabel(instance.Variant, income, def.BaseIncome)
+	local variantDef = Config.Variants.ById[instance.Variant]
+	if variantLabel and variantDef then
+		Components.chip(
+			variantLabel,
+			variantDef.Color:Lerp(Color3.new(0, 0, 0), 0.25),
+			UDim2.fromOffset(130, 26),
+			chips
+		)
+	end
+
+	local stats = Create("Frame", {
+		Name = "Stats",
+		Size = UDim2.new(1, 0, 0, 4 * 22 + 3 * 2),
+		BackgroundTransparency = 1,
+		LayoutOrder = 4,
+		Parent = stack,
+	}, { Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }) })
+	statRow(stats, 1, "INCOME", `+{Format.rate(income)}/S`, Theme.Colors.Cash)
+	statRow(stats, 2, "SELL VALUE", `${Format.short(Economy.cardSaleValue(data, instance), 1e6)}`, Theme.Colors.Gold)
+	statRow(stats, 3, "COPIES OWNED", `x{copiesOf(data, def.Id)}`)
+	statRow(
+		stats,
+		4,
+		"STATUS",
+		if standSlot then `ON STAND #{standSlot}` else "IN BACKPACK",
+		if onStand then Theme.Colors.Level else Theme.Colors.Text
+	)
+
+	local actions = Create("Frame", {
+		Name = "Actions",
+		Size = UDim2.new(1, 0, 0, 98),
+		BackgroundTransparency = 1,
+		LayoutOrder = 5,
+		Parent = stack,
+	})
 	local slot = targetSlot
 	Components.button({
 		Text = if slot then `PLACE ON STAND #{slot}` elseif onStand then "REMOVE FROM STAND" else "PLACE ON STAND",
-		Style = if slot then "Green" else "Blue",
-		Size = size,
-		LayoutOrder = 1,
+		Style = if slot then "Gold" elseif onStand then "Blue" else "Green",
+		Size = UDim2.new(1, 0, 0, 46),
 		Parent = actions,
 		OnClick = function()
 			if slot then
@@ -156,21 +280,22 @@ local function renderDetail(data: Types.PlayerData)
 		end,
 	})
 	Components.button({
-		Text = if instance.Favorite then "UNFAVOURITE" else "FAVOURITE",
+		Text = if instance.Favorite then "UNFAV" else "FAVOURITE",
 		Style = "Orange",
-		Size = size,
-		LayoutOrder = 2,
+		Size = UDim2.new(0.5, -4, 0, 46),
+		Position = UDim2.fromOffset(0, 52),
 		Parent = actions,
 		OnClick = function()
 			Request(Remotes.Functions.SetFavorite, id, not instance.Favorite)
 		end,
 	})
+	-- Selling is refused by the server for favourites and displayed cards; say why.
 	local canSell = not onStand and not instance.Favorite
-	local sell = Components.button({
-		Text = `SELL ${Format.short(saleValue, 1e6)}`,
-		Style = if canSell then "Green" else "Gray",
-		Size = size,
-		LayoutOrder = 3,
+	Components.button({
+		Text = if canSell then "SELL" elseif onStand then "ON STAND" else "FAVOURITE",
+		Style = if canSell then "Gold" else "Gray",
+		Size = UDim2.new(0.5, -4, 0, 46),
+		Position = UDim2.new(0.5, 4, 0, 52),
 		Parent = actions,
 		OnClick = function()
 			if canSell then
@@ -181,25 +306,36 @@ local function renderDetail(data: Types.PlayerData)
 			end
 		end,
 	})
-	sell.AutoButtonColor = false
+end
+
+local function refreshSortButtons()
+	for key, button in sortButtons do
+		Components.setButtonStyle(button, if key == sortKey then "Gold" else "Brown")
+	end
 end
 
 local function render()
-	local data = DataController:Get()
-	if not data or not Windows.isOpen("Backpack") then
+	if not Windows.isOpen("Backpack") then
 		return
 	end
 	clear(grid)
-	local entries = sortedEntries(data)
-	capacityLabel.Text = if targetSlot
-		then `PICK FOR STAND #{targetSlot}`
-		else `{#entries}/{Economy.backpackCapacity(data)}`
-	if #entries == 0 then
-		Components.label({
-			Text = "NO CARDS YET - BUY A PACK!",
-			Size = UDim2.new(1, 0, 0, 40),
-			Parent = grid,
-		})
+	local data = DataController:Get()
+	if not data then
+		Components.emptyState(grid, "LOADING YOUR CARDS...", "One moment")
+		clear(detail)
+		return
+	end
+	local entries, total = sortedEntries(data)
+	Components.setChipText(
+		capacityChip,
+		if targetSlot then `STAND #{targetSlot}` else `{total}/{Economy.backpackCapacity(data)}`
+	)
+	if total == 0 then
+		Components.emptyState(grid, "NO CARDS YET", "Open packs to collect ferrets.", "OPEN SHOP", function()
+			Windows.open("Packs")
+		end)
+	elseif #entries == 0 then
+		Components.emptyState(grid, "NO MATCHES", `Nothing matches "{query}".`)
 	end
 	for i, entry in entries do
 		local tile = CardTile.new(entry.def, {
@@ -222,73 +358,87 @@ end
 function BackpackController:Start()
 	Windows.register("Backpack", {
 		Title = "Backpack",
-		Accent = "Orange",
-		Size = Vector2.new(940, 560),
+		Icon = "ui.icon.backpack",
+		Size = Vector2.new(980, 600),
 		Build = function(content: Frame)
+			-- Toolbar: search, sort, capacity.
+			Components.searchBox("Search cards...", UDim2.fromOffset(250, 42), content, function(text)
+				query = text
+				render()
+			end)
 			local sortBar = Create("Frame", {
 				Name = "Sort",
-				Size = UDim2.new(1, -300, 0, 44),
+				Size = UDim2.fromOffset(3 * 118, 42),
+				Position = UDim2.fromOffset(262, 0),
 				BackgroundTransparency = 1,
 				Parent = content,
 			}, {
 				Create("UIListLayout", {
 					FillDirection = Enum.FillDirection.Horizontal,
 					SortOrder = Enum.SortOrder.LayoutOrder,
-					Padding = UDim.new(0, 8),
+					Padding = UDim.new(0, 6),
 				}),
 			})
 			for i, sort in SORTS do
-				Components.button({
+				sortButtons[sort.key] = Components.button({
 					Text = sort.label,
-					Style = "Purple",
-					Size = UDim2.fromOffset(120, 40),
+					Style = "Brown",
+					Size = UDim2.fromOffset(112, 42),
 					LayoutOrder = i,
 					Parent = sortBar,
 					OnClick = function()
 						sortKey = sort.key
+						refreshSortButtons()
 						render()
 					end,
 				})
 			end
-			capacityLabel = Components.label({
-				Text = "0/0",
-				Size = UDim2.fromOffset(140, 36),
-				Position = UDim2.new(1, -300, 0, 4),
-				AnchorPoint = Vector2.new(1, 0),
+			refreshSortButtons()
+			-- Capacity sits above the details column, clear of the toolbar.
+			capacityChip = Components.chip("0/0", Theme.Colors.BrownDark, UDim2.fromOffset(DETAIL_WIDTH, 38), content)
+			capacityChip.Position = UDim2.fromScale(1, 0)
+			capacityChip.AnchorPoint = Vector2.new(1, 0)
+
+			local gridPanel = Components.panel({
+				Name = "GridPanel",
+				Size = UDim2.new(1, -DETAIL_WIDTH - 12, 1, -54),
+				Position = UDim2.fromOffset(0, 54),
 				Parent = content,
 			})
 			grid = Create("ScrollingFrame", {
 				Name = "Grid",
-				Size = UDim2.new(1, -300, 1, -54),
-				Position = UDim2.fromOffset(0, 54),
-				BackgroundColor3 = Theme.Colors.PanelInset,
+				Size = UDim2.new(1, -8, 1, -8),
+				Position = UDim2.fromOffset(4, 4),
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				ScrollBarThickness = 8,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
 				CanvasSize = UDim2.new(),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				Parent = content,
+				Parent = gridPanel,
 			}, {
-				Components.corner(UDim.new(0, 12)),
 				Create("UIGridLayout", {
-					CellSize = UDim2.fromOffset(110, 154),
+					CellSize = UDim2.fromOffset(108, 162),
 					CellPadding = UDim2.fromOffset(10, 10),
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
 				Create("UIPadding", {
 					PaddingTop = UDim.new(0, 10),
-					PaddingLeft = UDim.new(0, 10),
-					PaddingRight = UDim.new(0, 10),
+					PaddingLeft = UDim.new(0, 8),
+					PaddingRight = UDim.new(0, 8),
 					PaddingBottom = UDim.new(0, 10),
 				}),
 			})
-			detail = Create("Frame", {
+			detail = Components.panel({
 				Name = "Detail",
-				Size = UDim2.new(0, 284, 1, 0),
-				Position = UDim2.new(1, 0, 0, 0),
+				Size = UDim2.new(0, DETAIL_WIDTH, 1, -54),
+				Position = UDim2.new(1, 0, 0, 54),
 				AnchorPoint = Vector2.new(1, 0),
-				BackgroundColor3 = Theme.Colors.PanelInset,
+				Color = Theme.Colors.PanelDeep,
+				Trim = Theme.Colors.Gold,
 				Parent = content,
-			}, { Components.corner(UDim.new(0, 12)) })
+			})
 			return render
 		end,
 		OnClose = function()
