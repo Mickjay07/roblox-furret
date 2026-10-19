@@ -10,6 +10,7 @@ local Types = require(Shared.Types)
 local CardArt = require(Shared.Logic.CardArt)
 local Format = require(Shared.Util.Format)
 
+local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
 local Components = require(script.Parent.Components)
 local Create = require(script.Parent.Create)
 local Theme = require(script.Parent.Theme)
@@ -130,6 +131,11 @@ function CardTile.new(def: Types.CardDef, options: Options?): GuiButton
 	local rarity = Config.Rarities.ById[def.Rarity]
 	local variant = Config.Variants.ById[opts.Variant or "Normal"] or Config.Variants.ById.Normal
 	local uploaded = CardArt.forCard(def)
+	if uploaded then
+		ArtDiagnostics.watch("CardTile", def.Artwork, uploaded)
+	else
+		ArtDiagnostics.fallback("CardTile", def.Artwork)
+	end
 	if uploaded and Config.Assets.FullCardArt then
 		return fullArtTile(def, uploaded, opts, variant)
 	end

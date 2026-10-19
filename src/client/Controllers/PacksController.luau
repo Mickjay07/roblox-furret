@@ -21,6 +21,7 @@ local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
+local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
 local Request = require(script.Parent.Parent.Lib.Request)
 local DataController = require(script.Parent.DataController)
 local NotificationController = require(script.Parent.NotificationController)
@@ -153,7 +154,9 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 			ScaleType = Enum.ScaleType.Fit,
 			Parent = row,
 		})
+		ArtDiagnostics.watch("Pack Shop", pack.Artwork, packArt)
 	else
+		ArtDiagnostics.fallback("Pack Shop", pack.Artwork)
 		local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(84, 104))
 		icon.Position = UDim2.fromOffset(10, 10)
 		icon.Parent = row

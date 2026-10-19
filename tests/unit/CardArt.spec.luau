@@ -53,6 +53,71 @@ describe("Pack 1 artwork mapping", function()
 	end)
 end)
 
+-- Image asset ids uploaded by the owner (Asset Manager), as configured in Config/Assets.
+local UPLOADED = {
+	["card.pack1.sandy"] = 140074029273080,
+	["card.pack1.boba"] = 84086042476135,
+	["card.pack1.sky"] = 123215287639771,
+	["card.pack1.kingston"] = 84803898229705,
+	["card.pack1.aurora"] = 79241250970768,
+	["card.pack1.frost"] = 128361345866040,
+	["pack.pack1.front"] = 104453844983670,
+}
+
+describe("CardArt resolves the uploaded Pack 1 images", function()
+	it("turns every configured AssetId into the exact rbxassetid content id", function()
+		for key, id in UPLOADED do
+			expect(Config.Assets.Images[key].AssetId).toBe(id)
+			expect(CardArt.image(key)).toBe(`rbxassetid://{string.format("%d", id)}`)
+		end
+	end)
+
+	it("gives every image its own id (no shared or ignored AssetId)", function()
+		local seen = {}
+		for key, asset in Config.Assets.Images do
+			if asset.AssetId > 0 then
+				expect(seen[asset.AssetId]).toBeNil()
+				seen[asset.AssetId] = key
+			end
+		end
+	end)
+
+	it("resolves each Pack 1 card and the pack front through their Artwork keys", function()
+		expect(CardArt.forCard(CardRegistry.get("pack1_sandy"))).toBe("rbxassetid://140074029273080")
+		expect(CardArt.forCard(CardRegistry.get("pack1_boba"))).toBe("rbxassetid://84086042476135")
+		expect(CardArt.forCard(CardRegistry.get("pack1_sky"))).toBe("rbxassetid://123215287639771")
+		expect(CardArt.forCard(CardRegistry.get("pack1_kingston"))).toBe("rbxassetid://84803898229705")
+		expect(CardArt.forCard(CardRegistry.get("pack1_aurora"))).toBe("rbxassetid://79241250970768")
+		expect(CardArt.forCard(CardRegistry.get("pack1_frost"))).toBe("rbxassetid://128361345866040")
+		expect(CardArt.forPack(Config.Packs.ById.pack1)).toBe("rbxassetid://104453844983670")
+	end)
+end)
+
+describe("CardArt.resolve reasons (diagnostics)", function()
+	it("explains why an image falls back to a placeholder", function()
+		local asset = Config.Assets.Images["card.pack1.boba"]
+		local original = asset.AssetId
+		local contentId, reason = CardArt.resolve("card.pack1.boba")
+		expect(contentId).toBe("rbxassetid://84086042476135")
+		expect(reason).toBe("AssetId 84086042476135")
+		asset.AssetId = 0
+		contentId, reason = CardArt.resolve("card.pack1.boba")
+		expect(contentId).toBeNil()
+		expect(reason).toBe("AssetId = 0 (not uploaded)")
+		asset.AssetId = "84086042476135" :: any
+		contentId, reason = CardArt.resolve("card.pack1.boba")
+		expect(contentId).toBeNil()
+		expect(reason).toBe("AssetId is a string, expected a number")
+		asset.AssetId = original
+		contentId, reason = CardArt.resolve("card.nope")
+		expect(contentId).toBeNil()
+		expect(reason).toBe("unknown key (not in Config.Assets.Images)")
+		contentId, reason = CardArt.resolve("")
+		expect(contentId).toBeNil()
+		expect(reason).toBe("no artwork key")
+	end)
+end)
+
 describe("CardArt fallback", function()
 	it("returns nil for images that are not uploaded yet (AssetId = 0)", function()
 		for key, asset in Config.Assets.Images do

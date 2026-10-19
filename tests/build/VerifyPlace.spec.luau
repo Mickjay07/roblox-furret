@@ -103,6 +103,10 @@ describe("built place", function()
 		},
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "Windows" }, class = "ModuleScript" },
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "CardTile" }, class = "ModuleScript" },
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "ArtDiagnostics" },
+			class = "ModuleScript",
+		},
 		{ path = { "ReplicatedStorage", "Shared", "Config" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Config", "Cards" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Remotes" }, class = "ModuleScript" },
@@ -110,6 +114,27 @@ describe("built place", function()
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "CardRegistry" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Util", "WeightedRandom" }, class = "ModuleScript" },
 	}
+
+	-- The place Studio runs must carry the real image ids (not the AssetId = 0 placeholder).
+	it("Config.Assets in the built place carries every uploaded image id", function()
+		local assets = find({ "ReplicatedStorage", "Shared", "Config", "Assets" })
+		expect(assets ~= nil).toBe(true)
+		local source = assets.Source
+		for _, id in
+			{
+				140074029273080,
+				84086042476135,
+				123215287639771,
+				84803898229705,
+				79241250970768,
+				128361345866040,
+				104453844983670,
+			}
+		do
+			expect(string.find(source, `AssetId = {string.format("%d", id)},`, 1, true) ~= nil).toBe(true)
+		end
+		expect(string.find(source, "AssetId = 0,", 1, true)).toBeNil()
+	end)
 
 	for _, case in expected do
 		local label = table.concat(case.path, ".")

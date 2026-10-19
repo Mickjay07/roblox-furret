@@ -20,6 +20,7 @@ local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Format = require(Shared.Util.Format)
 
+local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
 local UI = script.Parent.Parent.UI
 local Components = require(UI.Components)
 local Create = require(UI.Create)
@@ -168,7 +169,9 @@ local function render(visual: Visual)
 			ScaleType = Enum.ScaleType.Fit,
 			Parent = gui,
 		})
+		ArtDiagnostics.watch("Stand", def.Artwork, art)
 	else
+		ArtDiagnostics.fallback("Stand", def.Artwork)
 		placeholder(gui, def)
 	end
 	local variantDef = if type(variant) == "string" then Config.Variants.ById[variant] else nil
@@ -249,6 +252,8 @@ function StandVisualsController:IllustrationHeight(stand: Model): number
 end
 
 function StandVisualsController:Start()
+	-- Studio Output: how every artwork key resolves (key, AssetId, final content id).
+	ArtDiagnostics.report()
 	local plots = workspace:WaitForChild("Plots")
 	for _, descendant in plots:GetDescendants() do
 		if isStand(descendant) then

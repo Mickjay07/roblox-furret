@@ -9,20 +9,37 @@ local CardArt = {}
 
 local DEFAULT_ASPECT = 2 / 3
 
--- Content id for an asset key, e.g. "rbxassetid://123", or nil.
+-- Resolves an artwork key. Returns the content id (e.g. "rbxassetid://123") or nil plus a
+-- human-readable reason, so diagnostics can say exactly why a placeholder is shown.
 -- A raw "rbxassetid://<digits>" string is accepted as-is (spec §4: ArtworkAssetId).
-function CardArt.image(key: string?): string?
+function CardArt.resolve(key: string?): (string?, string)
 	if type(key) ~= "string" or key == "" then
-		return nil
+		return nil, "no artwork key"
 	end
 	if string.match(key, "^rbxassetid://%d+$") then
-		return key
+		return key, "raw content id"
 	end
 	local asset = Config.Assets.Images[key]
-	if not asset or type(asset.AssetId) ~= "number" or asset.AssetId <= 0 or asset.AssetId % 1 ~= 0 then
-		return nil
+	if not asset then
+		return nil, `unknown key (not in Config.Assets.Images)`
 	end
-	return `rbxassetid://{asset.AssetId}`
+	local id = asset.AssetId
+	if type(id) ~= "number" then
+		return nil, `AssetId is a {type(id)}, expected a number`
+	end
+	if id == 0 then
+		return nil, "AssetId = 0 (not uploaded)"
+	end
+	if id < 0 or id % 1 ~= 0 then
+		return nil, `AssetId {id} is not a positive integer`
+	end
+	return `rbxassetid://{id}`, `AssetId {id}`
+end
+
+-- Content id for an asset key, or nil when it can't be resolved (see CardArt.resolve).
+function CardArt.image(key: string?): string?
+	local contentId = CardArt.resolve(key)
+	return contentId
 end
 
 -- Width / height of the artwork (2:3 card shape by default).

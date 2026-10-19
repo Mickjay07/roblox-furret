@@ -78,11 +78,16 @@ the project owner in Roblox Studio. **Never invent asset ids.**
 4. Wait for the upload and moderation to finish. Each image appears in the Images list.
 5. For each image, right-click it and choose **Copy ID to Clipboard**. The number copied is
    the image asset id.
-6. Paste each number into `src/shared/Config/Assets.luau` as that entry's `AssetId`. For
-   example, for `card.pack1.sandy` from `card_001_sandy.png`, write `AssetId = 1234567890`.
+6. Paste each number into `src/shared/Config/Assets.luau`, replacing the `AssetId = 0` line
+   inside that image's entry (for example the `["card.pack1.sandy"]` block for
+   `card_001_sandy.png`). Each entry has its own `AssetId` field.
 7. Run `./scripts/check.sh` (ConfigCheck rejects malformed ids), then press Play. The
    backpack, reveal screen, pack shop and floating stand illustrations now show the real
-   art.
+   art. Studio's Output lists every image as `[Art] <key>: AssetId <id> -> rbxassetid://<id>`,
+   warns when a placeholder is drawn instead (and why), and warns when an image fails to
+   load (for example a decal id instead of the image id).
+
+**Pack 1 status:** all seven images are uploaded and their ids are set in `Config/Assets.luau`.
 
 Alternative: upload through the Creator Dashboard under *Development Items → Decals*. In
 that case, use the **image** id, not the decal id. In Studio, insert the decal and copy the
