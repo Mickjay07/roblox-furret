@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs every check that works without Roblox Studio. Exit code is non-zero on any failure.
-# Set SKIP_SELENE_IF_OFFLINE=1 to downgrade "selene cannot fetch the Roblox API dump" to a
-# warning (needed in cloud sessions whose network policy blocks roblox.com hosts).
+# Set SKIP_SELENE_IF_OFFLINE=1 to fall back to an approximate Roblox std when selene cannot
+# fetch the Roblox API dump (cloud sessions whose network policy blocks roblox.com hosts).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PATH="$HOME/.local/bin:$PATH"
@@ -13,7 +13,13 @@ echo "==> selene (lint)"
 if ! out=$(selene src 2>&1); then
 	echo "$out"
 	if [ "${SKIP_SELENE_IF_OFFLINE:-0}" = "1" ] && grep -q "Could not collect standard library" <<<"$out"; then
-		echo "WARNING: selene SKIPPED - Roblox API dump unreachable from this network."
+		echo "WARNING: Roblox API dump unreachable; linting with the offline approximation"
+		echo "         (scripts/selene-offline). Roblox API members are NOT checked."
+		tmp="$(mktemp -d)"
+		cp scripts/selene-offline/* "$tmp/"
+		cp -r src "$tmp/src"
+		(cd "$tmp" && selene src)
+		rm -rf "$tmp"
 	else
 		exit 1
 	fi

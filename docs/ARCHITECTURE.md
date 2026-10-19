@@ -1,89 +1,170 @@
 # Architecture
 
-These are the recommended conventions for Ferret Card Tycoon. Gameplay-specific systems
-must be checked against the game specification (`docs/SPEC.md`) before they are built.
-
 ## Principles
 
-1. **The server is authoritative.** All currency, cards, pack rolls, upgrades and income
-   are calculated on the server. Clients send *intents* (for example "open pack X"), and
-   the server validates every one of them. The client never sends values the server should
-   trust, such as prices, rolls or rewards.
-2. **Data-driven design.** Card definitions, rarities, drop weights, prices and upgrade
-   curves live in `src/shared/Config`, so balancing never requires changes to logic.
-3. **Pure logic, thin Roblox glue.** Rules that can be expressed without the Roblox API
-   (rolls, economy maths, progression) go in pure modules under `src/shared`. Those modules
-   are unit-tested under Lune. Services and controllers wire them to Roblox APIs.
-4. **No framework dependencies yet.** A small lifecycle convention (below) covers the
-   current needs. A dependency is added (through Wally) only when it clearly earns its
-   place.
+1. **The server is authoritative.** Currency, cards, rolls, upgrades and income are only
+   ever calculated and changed on the server. Clients send *intents* made of identifiers and
+   quantities (for example "buy 3 of pack X"). The server validates every one of them and
+   never accepts prices, rolls or rewards from a client.
+2. **Data-driven design.** Every gameplay number lives in `src/shared/Config/`. Code never
+   hard-codes balance values.
+3. **Pure rules, thin Roblox glue.** Rules that can be written without the Roblox API sit
+   in pure modules (`src/shared/Logic`, `src/server/Lib/SessionStore.luau`) and are
+   unit-tested under Lune. Services and controllers connect those rules to Roblox APIs.
+4. **No third-party runtime dependencies.** There are no frameworks and no Wally packages.
+   Persistence uses an in-house session store so its safety rules are fully testable.
 
 ## Runtime layout
 
-| Source | Studio location | Role |
-| --- | --- | --- |
-| `src/server/init.server.luau` | `ServerScriptService.Server` (Script) | Loads `Services/*` |
-| `src/server/Services/*.luau` | `…Server.Services` | One ModuleScript per server system |
-| `src/client/init.client.luau` | `StarterPlayerScripts.Client` (LocalScript) | Loads `Controllers/*` |
-| `src/client/Controllers/*.luau` | `…Client.Controllers` | One ModuleScript per client system (UI, effects) |
-| `src/shared/Config` | `ReplicatedStorage.Shared.Config` | Game-design data |
-| `src/shared/Remotes.luau` | `ReplicatedStorage.Shared.Remotes` | Names of all remotes |
-| `src/shared/Util/*` | `ReplicatedStorage.Shared.Util` | Pure helpers (for example `WeightedRandom`) |
+```
+ReplicatedStorage.Shared          (src/shared)  - required by server and client
+  Config/                         all tunable data (see below)
+  Types                           shared type definitions
+  Remotes                         names of every remote
+  Data/ProfileSchema              saved-data defaults, migrations, reconcile
+  Logic/                          pure game rules
+    CardRegistry, Economy, Progression, Collections, PackRoller, Grading,
+    Wallet, Inventory, Account, ConfigCheck
+  Util/                           WeightedRandom, Validate, RateLimiter, Signal, Format
+
+ServerScriptService.Server        (src/server)
+  init.server                     bootstrap: config check, then Init/Start of Services
+  Lib/
+    SessionStore                  session-locked DataStore profiles (pure, tested)
+    MockDataStore                 in-memory store (Studio without API access, tests)
+    Net                           remote creation, validation, rate limiting
+  Services/
+    DataService                   load/save lifecycle, replication, leaderstats
+    SettingsService               UpdateSetting remote
+
+StarterPlayerScripts.Client       (src/client)
+  init.client                     bootstrap: Init/Start of Controllers
+  Lib/Remotes                     safe invoke / event helpers
+  UI/                             Theme, Create, Components, Windows (window manager)
+  Controllers/
+    DataController                client mirror of the player's data
+    NotificationController        toasts
+    HUDController                 HUD and navigation
+    SettingsController            Settings window
+```
 
 ### Service / controller lifecycle
 
-Each module returns a table with optional `Init` and `Start` methods:
+A module returns a table with optional `Init` and `Start` methods. The bootstrap requires
+every module, then calls each `Init` (synchronous; must not yield or call other services),
+and then each `Start` (each in its own thread). A failing module is logged and does not stop
+the others. Register remote handlers in `Start`. `Net` creates the remotes lazily.
 
-```lua
-local MyService = {}
+## Configuration (`src/shared/Config`)
 
-function MyService:Init()  -- synchronous setup; must not yield; no calls to other services
-end
+| Module | Contents |
+| --- | --- |
+| `Game` | DataStore settings (store name, autosave, lock expiry, retries), per-remote rate limits, request limits, display and backpack base sizes |
+| `Economy` | Currencies, starting currency, starter cards, income tick, sale multiplier, XP curve |
+| `Rarities` | Common → Secret: order, colour, whether luck applies |
+| `Variants` | Normal, Shiny, Gold, Holo, Rainbow: multipliers and drop weights |
+| `Collections` | 6 collections with completion income bonuses |
+| `Cards` | 36 card definitions (id, name, description, species, rarity, income, sale value, artwork, collection and number, optional variants and unlock requirement) |
+| `Packs` | 6 packs: price, cards per open, collections, rarity weights, XP, unlock requirement |
+| `Grading` | Sub-grades, roll weights, labels, grade multipliers, cost formula |
+| `Upgrades` | Display stands, income boost, luck, sell bonus, backpack space |
+| `Monetization` | Game pass and developer product placeholders (`Id = 0` means disabled) |
 
-function MyService:Start() -- runs in its own thread after every Init has finished
-end
+`Logic/ConfigCheck` checks every cross-reference: unknown rarities, collections and
+variants, unreachable cards, starter cards that don't exist, and so on. The tests require a
+clean result, and the server logs any problem at startup.
 
-return MyService
-```
+**Card ids are permanent.** They are stored in player data, so never rename or reuse one.
 
-The bootstrap calls `Init` on every module first, and then `Start` on every module. A
-failure in one module is logged and does not stop the others from loading.
+## Player data (`Data/ProfileSchema`, version 1)
 
-### Networking
+| Field | Purpose |
+| --- | --- |
+| `Currency` | `{ Cash, Treats }` |
+| `Cards` | `instanceId -> { CardId, Variant, Grade?, Obtained, Favorite }` |
+| `NextCardSerial` | Per-player counter for unique instance ids `<userId>-<serial>` |
+| `Discovered` | `cardId -> { First, Count, Variants }` (collection progress derives from this) |
+| `Display` | `slot ("1", "2", …) -> instanceId` |
+| `Upgrades` | `upgradeId -> level` |
+| `Collections.Claimed` | Reserved for collection reward claims |
+| `Quests`, `DailyRewards` | Reserved for later phases |
+| `Settings` | Music/SFX volume, notifications, reduced motion (validated by `SETTINGS`) |
+| `Progression` | `{ Level, Xp }` |
+| `Stats` | Packs opened, cards obtained or sold, cash earned or spent, play time, joins |
+| `Flags.StarterGranted` | Starter-reward guard |
+| `Purchases.Receipts` | Reserved for de-duplicating developer product receipts |
 
-- All remotes are declared by name in `Shared/Remotes.luau`.
-- A server service creates them in a `ReplicatedStorage.Remotes` folder at startup.
-- Clients look remotes up only by the declared names.
-- Every remote handler on the server validates the argument types and the player's state,
-  and rate-limits calls where that makes sense.
+Maps use string keys so they save as dictionaries.
 
-## Expected systems (to be confirmed against the spec)
+**Schema changes:** bump `ProfileSchema.VERSION` and add `MIGRATIONS[old]`. Migrations run
+on a copy, and a failure rejects the load. `reconcile` fills in new fields from the
+defaults without touching existing values.
 
-These are typical for a card tycoon. Build only what the spec calls for.
+## Persistence (`Lib/SessionStore` + `Services/DataService`)
 
-- **DataService:** loads and saves player profiles with session locking and retries.
-  Recommended approach: [ProfileStore](https://github.com/MadStudioRoblox/ProfileStore),
-  vendored or installed through Wally.
-- **EconomyService:** currencies and passive income ticks.
-- **CardService / PackService:** card catalogue and pack opening (uses `WeightedRandom`).
-- **TycoonService:** plot assignment, purchasable buttons and droppers or display stands.
-- **UI controllers:** HUD, inventory or collection book, and the pack-opening animation.
+Each DataStore record has the shape
+`{ Data, Meta = { LockJobId, LockTime, SavedAt, SaveCount } }`.
+
+**Loading:** the load is one `UpdateAsync` call:
+
+- **No record:** create defaults and take the lock.
+- **Locked by another live server:** abort without writing, wait, then retry.
+  `ContestedLockRetries × ContestedLockDelay` covers fast rejoins.
+- **Lock expired** (`LockExpirySeconds`, 10 minutes, with no save): take it over.
+- **Data from a newer schema, a failed migration, or a malformed record:** reject it and
+  leave it untouched.
+- **DataStore errors:** retry with exponential backoff. If every attempt fails, the
+  **player is kicked** and default data is never used.
+
+**Saving:**
+
+- **Every save checks the lock inside `UpdateAsync`.** A server that lost the lock gets
+  nothing written, and the player is kicked ("opened on another server").
+- **Autosave:** every 90 seconds, with saves staggered across players.
+- **Leaving:** the final save also releases the lock.
+- **Shutdown:** `BindToClose` releases every profile and waits up to 25 seconds for pending
+  saves.
+- **Per-key operations are serialized,** so an autosave and a release never interleave.
+
+**Starter rewards:** `Account.grantStarter` checks and sets `Flags.StarterGranted`, which is
+saved in the same profile. Combined with the session lock, the reward can't be granted
+twice.
+
+**Studio:** if the DataStore probe fails in Studio (API access disabled), the game uses
+`MockDataStore`. It warns loudly and shows a toast, and nothing is saved. Live servers never
+use the mock store.
+
+## Networking (`Lib/Net`, `Shared/Remotes`)
+
+- Remote names are declared once, in `Shared/Remotes`.
+- The server creates them under `ReplicatedStorage.Remotes`.
+- `Net.onInvoke(name, checkers, handler)` adds three layers:
+  1. **Rate limiting:** a token bucket per player per remote (`Config.Game.RateLimits`).
+  2. **Validation:** argument count and type checks (`Util/Validate`: ids, integers with
+     range checks, NaN and infinity rejected, strict arrays).
+  3. **Error isolation:** a handler error is logged and the client receives a generic
+     failure.
+- Handlers return `{ ok = true, ... }` or `{ ok = false, error = "..." }`.
+- Handlers must also check game rules: ownership, affordability, unlocks and capacity.
+
+**Replication:**
+
+- `DataChanged(key, value)` sends a whole field.
+- `DataPatched(key, set, remove)` sends changed entries of map fields such as `Cards`.
+- `DataChanged("__snapshot", data)` sends the full snapshot after load. The client also
+  requests it through `GetSnapshot`, in case it connected late.
+
+## Client UI
+
+The HUD and windows are built in code (`UI/Create`, `UI/Components`) using the theme taken
+from the reference screenshots (`docs/reference-screenshots/README.md`). Layouts are
+authored for a 1280×760 viewport and scaled to the screen with `Components.autoScale`.
+`UI/Windows` is a single-window modal manager: features register a window, and HUD
+navigation opens it. Unregistered features show "Coming soon!".
 
 ## World geometry
 
-Rojo syncs scripts well, but it is a poor fit for hand-built 3D layouts. The recommended
-approach:
-
-- Build tycoon plot templates in Studio.
-- Export each template as a model file (`.rbxm`) to `assets/models/` and map it in
-  `default.project.json`, so models are versioned in Git as binary files.
-- Alternatively, generate simple plot geometry from code at runtime.
-
-Decide this in the phase that builds the first tycoon plot.
-
-## Persistence safety
-
-- Never write to DataStores from the client.
-- Use Studio's **Enable Studio Access to API Services** setting only in test places.
-- Version the profile schema from the first release, and write a migration whenever the
-  schema changes.
+Rojo is a poor fit for hand-built 3D layouts. The plan is to export plot templates from
+Studio as `.rbxm` files to `assets/models/` and map them in `default.project.json`, or to
+generate simple geometry in code. This will be decided in the phase that builds the
+physical plot.

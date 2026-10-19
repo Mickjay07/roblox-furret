@@ -1,11 +1,24 @@
 --!strict
--- Single list of RemoteEvent / RemoteFunction names. A server service (Phase 1) will create them under
--- ReplicatedStorage.Remotes at startup; clients only ever look them up by these names.
--- Add entries as features land, e.g. OpenPack = "OpenPack".
+-- Every RemoteEvent / RemoteFunction name. The server creates them in
+-- ReplicatedStorage.Remotes at startup (server/Lib/Net); clients look them up by these names.
+--
+-- Functions are client -> server requests that return a Result table:
+--   { ok = true, ... } or { ok = false, error = "message for the player" }.
+-- Events listed here are server -> client only; the server ignores anything clients fire.
 
 local Remotes = {
-	Events = {} :: { [string]: string },
-	Functions = {} :: { [string]: string },
+	Functions = {
+		GetSnapshot = "GetSnapshot",
+		UpdateSetting = "UpdateSetting",
+	},
+	Events = {
+		-- (key: string, value: any) replaces a whole top-level PlayerData field.
+		DataChanged = "DataChanged",
+		-- (key: string, set: { [string]: any }, remove: { string }) patches a map field.
+		DataPatched = "DataPatched",
+		-- (message: string, kind: string) shows a toast notification.
+		Notify = "Notify",
+	},
 }
 
-return table.freeze(Remotes)
+return Remotes

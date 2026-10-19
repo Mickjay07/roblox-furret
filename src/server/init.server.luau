@@ -2,7 +2,14 @@
 -- Server bootstrap: loads every ModuleScript in Services, calls Init on all of them,
 -- then Start on all of them. Services must not yield inside Init.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ConfigCheck = require(ReplicatedStorage:WaitForChild("Shared").Logic.ConfigCheck)
 local Services = script:WaitForChild("Services")
+
+for _, problem in ConfigCheck.run() do
+	warn(`[Config] {problem}`)
+end
 
 type Service = {
 	Init: ((self: any) -> ...any)?,

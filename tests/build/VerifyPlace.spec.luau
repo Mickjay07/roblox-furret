@@ -36,8 +36,24 @@ describe("built place", function()
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client" }, class = "LocalScript" },
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers" }, class = "Folder" },
 		{ path = { "ReplicatedStorage", "Shared" }, class = "Folder" },
+		{ path = { "ServerScriptService", "Server", "Services", "DataService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Services", "SettingsService" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Lib", "SessionStore" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Lib", "Net" }, class = "ModuleScript" },
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "DataController" },
+			class = "ModuleScript",
+		},
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "HUDController" },
+			class = "ModuleScript",
+		},
+		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "UI", "Windows" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Config" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Config", "Cards" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Remotes" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Data", "ProfileSchema" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "CardRegistry" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Util", "WeightedRandom" }, class = "ModuleScript" },
 	}
 
