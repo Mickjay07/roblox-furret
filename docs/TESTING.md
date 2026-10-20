@@ -366,9 +366,12 @@ Use Studio's Device emulator (e.g. 1920×1080, iPhone 14 portrait/landscape, iPa
       YET` + OPEN SHOP (opens the Pack Shop); a search with no results says `NO MATCHES`.
       From a physical stand the chip reads `STAND #n` and the main action places the card.
 - [ ] **Binder:** bookmarks per collection with progress bars; the page shows the
-      collection name, progress bar with %, the real completion bonus and the overall total;
-      discovered cards show art and `xN` copies; undiscovered show the card back with
-      `#00N`.
+      collection name, progress bar with %, the real completion bonus and the overall total.
+      Each card's full art is uncovered: the copy count sits in its own strip **below** the
+      card (`OWNED x68`, `OWNED x2`, `OWNED x0` dimmed for a card found earlier but sold).
+      Counts match the backpack. Undiscovered cards show the card back with `#00N` and
+      `NOT FOUND` underneath. Every cell has the same height and the grid stays aligned with
+      large (x68), small (x2) and zero counts; sell a card and the count updates.
 - [ ] **Pack Shop:** balance and `MY PACKS` chips; each pack has large art with a glow,
       chase line, BUY (green) or `NEED $X` (grey) when you can't afford it, the stepper,
       OPEN (gold) and the 1/3/6 mode strip (selected mode gold; locked passes purple
@@ -388,13 +391,22 @@ Use Studio's Device emulator (e.g. 1920×1080, iPhone 14 portrait/landscape, iPa
       30 cards with manual reveals.
 - [ ] **Notifications:** forest card with gold trim and a coloured round badge (i / ✓ / ! /
       ✕) that pops in.
-- [ ] **HUD alignment:** the currency bar starts close to the left edge (10 px inside the
-      safe area) with no empty gap before the art; the money text sits inside the green
-      field and stays readable from `0` to `1T`. Client Output shows `[Art] measured
-      ui.currency_bar: ...` (or a warning that measuring isn't allowed - then tune
-      `Config.Visuals.Hud.CurrencyBar`). The four right-rail icons look the same size
-      (backpack no longer smaller), line up in one column and all open their windows;
-      `Config.Visuals.Hud.IconScale` can fine-tune one icon.
+- [ ] **HUD alignment:** client Output shows one line per HUD image:
+      `[Art] HUD ui.currency_bar: measured and cropped` or `... fallback (...)`, and the same
+      for the four icons. A `could not measure` warning means EditableImage access is off
+      and the configured fallbacks are in use.
+  - Currency bar: the art starts at about the same x as the `+CASH/S` line below it (no
+    ~70 px gap), and the money text sits inside the green field and stays readable from
+    `0` to `1T`. If it's still off, tune `Hud.CurrencyBar.FallbackOffsetX` (fallback) or
+    paste the printed `[Art] measured` line into `Hud.ImageBounds` (measured).
+  - Icons: BAG, BINDER, UPGRADES and SETTINGS look the same visible size (the backpack
+    is no longer smaller), line up in one column, and each still opens its window when
+    clicked anywhere on the icon. Fine-tune with `Hud.IconScaleFallback` / `Hud.IconScale`.
+- [ ] **Display stands (3D):** wooden pedestals with a gold rim, green felt top
+      (unlocked) or grey stone (locked), a dark-green plaque with a gold `#n`, and a gold
+      glow ring when a card is on display. The uncollected-cash counter is a gold-trimmed
+      pill with a coin **above** the floating card (never hidden behind it), sinks to just
+      above the pedestal when the stand is empty, and shrinks with distance.
 
 ## Part 2: specification features (run when implemented)
 

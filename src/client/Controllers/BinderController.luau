@@ -11,6 +11,7 @@ local Config = require(Shared.Config)
 local Types = require(Shared.Types)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Collections = require(Shared.Logic.Collections)
+local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
 local CardTile = require(UI.CardTile)
@@ -18,11 +19,16 @@ local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
+local Coalesce = require(script.Parent.Parent.Lib.Coalesce)
 local DataController = require(script.Parent.DataController)
 
 local BinderController = {}
 
 local TAB_WIDTH = 270
+-- Grid cell: the card (2:3) plus a reserved strip underneath for the copy count, so the
+-- count never covers the card's art, name, rarity or income.
+local CARD_W, CARD_H = 120, 180
+local STRIP_H = 26
 
 local selected = Config.Collections.List[1].Id
 local tabs: ScrollingFrame
@@ -128,12 +134,43 @@ function BinderController:Render()
 	local found, all = Collections.overall(data)
 	totalLabel.Text = `ALL COLLECTIONS {found}/{all}`
 
+	-- Copies the player owns right now (the backpack is the source of truth; Discovered.Count
+	-- counts every copy ever found, including sold ones).
+	local owned: { [string]: number } = {}
+	for _, instance in data.Cards do
+		owned[instance.CardId] = (owned[instance.CardId] or 0) + 1
+	end
 	for _, card: Types.CardDef in CardRegistry.inCollection(selected) do
 		local entry = data.Discovered[card.Id]
+		local cell = Create("Frame", {
+			Name = card.Id,
+			BackgroundTransparency = 1,
+			LayoutOrder = card.CollectionNumber,
+			Parent = grid,
+		})
+		local tile: GuiObject = if entry then CardTile.new(card, {}) else CardTile.unknown(nil, card.CollectionNumber)
+		tile.Size = UDim2.fromOffset(CARD_W, CARD_H)
+		tile.Parent = cell
+		-- Copy count in its own strip below the card.
 		if entry then
-			CardTile.new(card, { LayoutOrder = card.CollectionNumber, Count = entry.Count }).Parent = grid
+			local count = owned[card.Id] or 0
+			local chip = Components.chip(
+				`OWNED x{Format.commas(count)}`,
+				if count > 0 then Theme.Colors.BrownDark else Theme.Colors.PanelDeep,
+				nil,
+				cell
+			)
+			chip.Size = UDim2.fromOffset(CARD_W - 8, STRIP_H - 4)
+			chip.Position = UDim2.fromOffset(4, CARD_H + 4)
 		else
-			CardTile.unknown(card.CollectionNumber, card.CollectionNumber).Parent = grid
+			Components.label({
+				Text = "NOT FOUND",
+				Size = UDim2.fromOffset(CARD_W - 16, STRIP_H - 8),
+				Position = UDim2.fromOffset(8, CARD_H + 6),
+				Color = Theme.Colors.Muted,
+				StrokeThickness = 1.5,
+				Parent = cell,
+			})
 		end
 	end
 end
@@ -222,7 +259,7 @@ function BinderController:Start()
 				Parent = page,
 			}, {
 				Create("UIGridLayout", {
-					CellSize = UDim2.fromOffset(120, 180),
+					CellSize = UDim2.fromOffset(CARD_W, CARD_H + STRIP_H + 2),
 					CellPadding = UDim2.fromOffset(12, 12),
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					SortOrder = Enum.SortOrder.LayoutOrder,
@@ -234,9 +271,13 @@ function BinderController:Start()
 			end
 		end,
 	})
+	-- Owned counts come from Cards, discoveries from Discovered: one re-render per frame.
+	local scheduleRender = Coalesce(function()
+		BinderController:Render()
+	end)
 	DataController.Changed:Connect(function(changed)
-		if changed == "Discovered" or changed == "*" then
-			BinderController:Render()
+		if changed == "Discovered" or changed == "Cards" or changed == "*" then
+			scheduleRender()
 		end
 	end)
 end

@@ -3,6 +3,41 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-20: Studio feedback fixes: Binder counts, HUD image fallbacks, stands and cash counter
+
+Based on the owner's Studio screenshot (HUD and plot) and report.
+
+- **Binder copy counts:** they were tags drawn over the card art (`x68`, `x15`, ...).
+  - Each grid cell now reserves a strip **under** the 2:3 card for an `OWNED xN` chip, so the
+    art, name, rarity and income stay uncovered. Undiscovered cells show `NOT FOUND`.
+  - All cells share one height (120 × 208) and the grid stays aligned.
+  - Counts now come from the backpack (`data.Cards`), the real ownership; `Discovered.Count`
+    counts every copy ever found, including sold ones. The Binder re-renders on Cards too.
+- **HUD images (diagnosis):** in the screenshot the currency art started ~75 px from the edge
+  while the `+CASH/S` line started at ~10 px. The backpack's visible art was ~76 px against
+  ~105–116 px for the other icons. So the runtime crop was **not** applied: EditableImage
+  measurement evidently didn't run (no log was shared; Studio now prints the path taken).
+- **HUD images (fixes):**
+  - Manual fallbacks taken from the screenshot: `Hud.IconScaleFallback` (backpack ×1.4) and
+    `Hud.CurrencyBar.FallbackOffsetX` (−0.12).
+  - Icon art is now a child ImageLabel of a fixed square hit area, so scaling or cropping the
+    art never changes where the button can be clicked.
+  - The money TextLabel is now a child of the bar art, so it moves with it and stays on the
+    green field.
+  - `ImageBounds.report` prints `[Art] HUD <key>: measured and cropped | fallback (...)` once
+    per image, and the measurement warning explains the EditableImage requirement.
+- **Stand cash counter:** it sat at the pedestal top, where the floating card hid its middle
+  (only `$` … `K` visible). It is now a gold-trimmed pill with a coin, sized in studs and
+  floating **above** the card's top edge; on an empty stand it sits just above the pedestal.
+- **Pedestals:**
+  - The body is wood with a darker foot, a gold metal rim and a felt top: forest green when
+    unlocked, slate grey when locked.
+  - A neon gold ring glows under the rim while a card is displayed (PlotService).
+  - The number plaque is dark green with gold text.
+- Pack Shop, Upgrades and Settings unchanged.
+- Tests: 4 new (HUD fallback config, stand palette). `SKIP_SELENE_IF_OFFLINE=1
+  ./scripts/check.sh`: all checks passed, 271 tests. **Not verified in Studio.**
+
 ## 2026-10-19: Full GUI redesign (Ferret Frenzy visual identity) and HUD alignment fixes
 
 **Inventory of player-facing UI (before):**

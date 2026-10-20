@@ -29,6 +29,11 @@ local NotificationController = require(script.Parent.NotificationController)
 
 local PlotController = {}
 
+-- Height of the earnings counter above the stand anchor: above the floating illustration's
+-- top edge (its centre offset + half its height) and its variant tag.
+local ILLUSTRATION = Config.Visuals.Illustration
+local ABOVE_CARD = ILLUSTRATION.HeightOffset + (ILLUSTRATION.WidthStuds * 1.5) / 2 + 1.3
+
 local localPlayer = Players.LocalPlayer
 
 type StandUI = {
@@ -77,7 +82,9 @@ local function update(ui: StandUI)
 	ui.collect.ActionText = `Collect ${Format.short(pending)}`
 	ui.collect.ObjectText = `Stand #{ui.slot}`
 	ui.earnings.Enabled = mine and pending > 0
-	ui.earningsLabel.Text = `${Format.short(pending)}`
+	ui.earningsLabel.Text = Format.short(pending, 1e4)
+	-- Above the floating card when there is one, otherwise just above the pedestal.
+	ui.earnings.StudsOffset = Vector3.new(0, if def then ABOVE_CARD else 1.2, 0)
 
 	ui.inspect.Enabled = not mine and def ~= nil
 	ui.inspect.ObjectText = if def then def.Name else ""
@@ -94,22 +101,61 @@ local function track(stand: Model)
 	if not base or not anchor or not anchor:IsA("BasePart") or type(slot) ~= "number" then
 		return
 	end
+	-- Uncollected-cash counter: a gold-trimmed pill sized in studs (it shrinks with distance
+	-- like the card). It floats above the card's top edge so the illustration never covers
+	-- it (update() moves it down to the pedestal when the stand has no card).
 	local earnings: BillboardGui = Create("BillboardGui", {
 		Name = "Earnings",
 		Adornee = anchor,
-		Size = UDim2.fromOffset(150, 40),
-		StudsOffset = Vector3.new(0, -1.2, 0),
+		Size = UDim2.new(3.8, 0, 0.95, 0),
+		StudsOffset = Vector3.new(0, ABOVE_CARD, 0),
 		LightInfluence = 0,
-		MaxDistance = 60,
+		MaxDistance = 70,
 		Enabled = false,
 		Parent = anchor,
 	})
+	local pill = Create("Frame", {
+		Name = "Pill",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+		Parent = earnings,
+	}, {
+		Components.corner(UDim.new(1, 0)),
+		Create("UIStroke", { Color = Theme.Colors.Gold, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		Create("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 185, 170)),
+		}),
+	})
+	local coin = Create("Frame", {
+		Name = "Coin",
+		Size = UDim2.fromScale(0.24, 0.86),
+		Position = UDim2.fromScale(0.04, 0.5),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Theme.Colors.Gold,
+		Parent = pill,
+	}, {
+		Components.corner(UDim.new(1, 0)),
+		Components.stroke(Theme.Colors.GoldDark, 2),
+		Create("UIAspectRatioConstraint", { AspectRatio = 1 }),
+	})
+	Components.label({
+		Text = "$",
+		Size = UDim2.fromScale(0.8, 0.8),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Color = Theme.Colors.BrownDark,
+		StrokeThickness = 0,
+		Parent = coin,
+	})
 	local label = Components.label({
 		Text = "$0",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(0.66, 0.78),
+		Position = UDim2.fromScale(0.3, 0.5),
+		AnchorPoint = Vector2.new(0, 0.5),
 		Color = Theme.Colors.Cash,
-		StrokeThickness = 3,
-		Parent = earnings,
+		StrokeThickness = 2.5,
+		Parent = pill,
 	})
 	local ui: StandUI = {
 		stand = stand,

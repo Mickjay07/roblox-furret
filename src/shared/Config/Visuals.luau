@@ -50,8 +50,15 @@ return table.freeze({
 		PlotFree = rgb(200, 200, 210),
 		Wood = rgb(176, 120, 76),
 		Roof = rgb(255, 120, 120),
-		Pedestal = rgb(255, 250, 240),
-		PedestalLocked = rgb(120, 124, 140),
+		-- Display stands (Ferret Frenzy style): wooden body, gold rim, forest-green felt top for
+		-- an unlocked stand, grey stone for a locked one, gold glow ring when a card is shown.
+		Pedestal = rgb(52, 120, 70),
+		PedestalLocked = rgb(112, 118, 110),
+		PedestalBase = rgb(128, 84, 46),
+		PedestalRim = rgb(236, 186, 74),
+		PedestalGlow = rgb(255, 222, 130),
+		StandPlate = rgb(22, 58, 36),
+		StandPlateText = rgb(255, 214, 110),
 		SignBackground = rgb(40, 36, 58),
 		SignText = rgb(255, 255, 255),
 		Trunk = rgb(150, 100, 60),
@@ -90,15 +97,25 @@ return table.freeze({
 			TextInsetBottom = 0.22,
 			MaxTextSize = 44,
 			MinTextSize = 10,
+			-- Used only when the art can't be measured (no crop): shifts the bar art (and the
+			-- money text, which is its child) left by this fraction of the bar width. From the
+			-- Studio screenshot: the visible art started ~13% into its 4:1 box, leaving a gap
+			-- before it; -0.12 keeps a hair of margin.
+			FallbackOffsetX = -0.12,
 		}),
 		-- Gap between the left screen edge (inside the device safe area) and the stats panel.
 		LeftMargin = 10,
-		-- Right rail icons (ui.icon.*): square slots, image drawn with ScaleType.Fit and cropped
-		-- to its visible pixels at runtime (Lib/ImageBounds), so transparent margins don't make
-		-- one icon look smaller than another. IconScale fine-tunes a single icon if needed,
-		-- e.g. ["ui.icon.backpack"] = 1.1.
+		-- Right rail icons (ui.icon.*): square hit areas; the art is drawn with ScaleType.Fit
+		-- and cropped to its visible pixels when they can be measured (Lib/ImageBounds), so
+		-- transparent margins don't make one icon look smaller than another.
 		IconSize = 84,
+		-- Manual multiplier on top of everything, e.g. ["ui.icon.binder"] = 0.95.
 		IconScale = table.freeze({} :: { [string]: number }),
+		-- Used only when the art can't be measured (no crop). From the Studio screenshot of
+		-- 2026-10-19: the backpack's visible art was ~76 px tall against ~105-116 px for the
+		-- binder, upgrades and settings icons in equal slots, i.e. its image carries larger
+		-- transparent margins; x1.4 brings it to the same visible size.
+		IconScaleFallback = table.freeze({ ["ui.icon.backpack"] = 1.4 } :: { [string]: number }),
 		ShowCaptions = true,
 		-- Optional measured pixel data per image (Width, Height, MinX, MinY, MaxX, MaxY and for
 		-- the currency bar Green = { Left, Right, Top, Bottom }). Studio prints these lines as

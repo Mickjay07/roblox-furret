@@ -47,7 +47,13 @@ local function applyStands(index: number, states: { PlotView.StandState }, owner
 				top.Color = if state.Unlocked
 					then Config.Visuals.World.Pedestal
 					else Config.Visuals.World.PedestalLocked
-				top.Transparency = if state.Unlocked then 0 else 0.35
+				top.Material = if state.Unlocked then Enum.Material.Fabric else Enum.Material.Slate
+				top.Transparency = 0
+			end
+			-- Soft gold ring under a displayed card.
+			local glow = stand:FindFirstChild("Glow")
+			if glow and glow:IsA("BasePart") then
+				glow.Transparency = if state.CardId then 0.45 else 1
 			end
 		end
 	end

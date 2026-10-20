@@ -53,7 +53,12 @@ local function measureNow(key: string, contentId: string, findGreen: boolean): M
 	end)
 	if not ok then
 		if IS_STUDIO then
-			warn(`[Art] could not measure {key} ({result}); using Config.Visuals.Hud values`)
+			warn(
+				`[Art] could not measure {key} ({result}). Using the Config.Visuals.Hud fallbacks instead. `
+					.. "Reading image pixels needs EditableImage access: check the experience's Game Settings "
+					.. "(Security) for the Mesh / Image API permission and that the image belongs to the "
+					.. "experience's owner."
+			)
 		end
 		return nil
 	end
@@ -128,6 +133,17 @@ function ImageBounds.get(key: string, contentId: string, findGreen: boolean, cal
 			task.spawn(cb, measurement)
 		end
 	end)
+end
+
+local reported: { [string]: boolean } = {}
+
+-- Studio Output: which layout path a HUD image ended up using ("measured and cropped" or a
+-- named fallback), once per image - so it's visible whether the measurement really ran.
+function ImageBounds.report(key: string, how: string)
+	if IS_STUDIO and not reported[key] then
+		reported[key] = true
+		print(`[Art] HUD {key}: {how}`)
+	end
 end
 
 -- Crops an image object to the measured visible rectangle (aspect stays the art's own).

@@ -445,33 +445,71 @@ local function buildStand(plot: PlotLayout.Plot, slot: number, parent: Instance)
 	model:SetAttribute("PlotIndex", plot.Index)
 	model:SetAttribute("Slot", slot)
 	local upright = CFrame.Angles(0, 0, math.rad(90))
+	-- Wooden body with a wider foot, a gold rim and a felt top (PlotService colours the top
+	-- for locked / unlocked and shows the glow ring when a card is on display).
 	local base = WorldBuilder.part({
 		Name = "Base",
-		Size = Vector3.new(2.4, 3.6, 3.6),
+		Size = Vector3.new(2.4, 3.4, 3.4),
 		CFrame = plotCFrame(plot, u, 1.2 + 0.3, v) * upright,
-		Color = Palette.Pedestal,
+		Color = Palette.PedestalBase,
+		Material = Enum.Material.Wood,
 		Shape = Enum.PartType.Cylinder,
+		Parent = model,
+	})
+	WorldBuilder.part({
+		Name = "Foot",
+		Size = Vector3.new(0.5, 4.2, 4.2),
+		CFrame = plotCFrame(plot, u, 0.55, v) * upright,
+		Color = Palette.PedestalBase:Lerp(Color3.new(0, 0, 0), 0.25),
+		Material = Enum.Material.Wood,
+		Shape = Enum.PartType.Cylinder,
+		Parent = model,
+	})
+	WorldBuilder.part({
+		Name = "Rim",
+		Size = Vector3.new(0.3, 4.5, 4.5),
+		CFrame = plotCFrame(plot, u, 2.72, v) * upright,
+		Color = Palette.PedestalRim,
+		Material = Enum.Material.Metal,
+		Shape = Enum.PartType.Cylinder,
+		CanCollide = false,
 		Parent = model,
 	})
 	local top = WorldBuilder.part({
 		Name = "Top",
-		Size = Vector3.new(0.4, 4.2, 4.2),
-		CFrame = plotCFrame(plot, u, 2.9, v) * upright,
+		Size = Vector3.new(0.4, 4.1, 4.1),
+		CFrame = plotCFrame(plot, u, 2.95, v) * upright,
 		Color = Palette.PedestalLocked,
-		Material = Enum.Material.SmoothPlastic,
+		Material = Enum.Material.Fabric,
 		Shape = Enum.PartType.Cylinder,
 		Parent = model,
 	})
-	local label = WorldBuilder.part({
-		Name = "Label",
-		Size = Vector3.new(1.6, 0.8, 0.1),
-		CFrame = plotCFrame(plot, u, 1.4, v) * CFrame.new(0, 0, -1.85),
-		Color = Palette.SignBackground,
+	local glow = WorldBuilder.part({
+		Name = "Glow",
+		-- Just under the rim and wider than it: shows as a glowing ring around the edge
+		-- without covering the felt top.
+		Size = Vector3.new(0.15, 4.8, 4.8),
+		CFrame = plotCFrame(plot, u, 2.5, v) * upright,
+		Color = Palette.PedestalGlow,
+		Material = Enum.Material.Neon,
+		Shape = Enum.PartType.Cylinder,
+		Transparency = 1,
 		CanCollide = false,
 		CastShadow = false,
 		Parent = model,
 	})
-	WorldBuilder.sign(label, `#{slot}`)
+	glow.CanQuery = false
+	glow.CanTouch = false
+	local label = WorldBuilder.part({
+		Name = "Label",
+		Size = Vector3.new(1.5, 0.75, 0.1),
+		CFrame = plotCFrame(plot, u, 1.5, v) * CFrame.new(0, 0, -1.76),
+		Color = Palette.StandPlate,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = model,
+	})
+	WorldBuilder.sign(label, `#{slot}`, Palette.StandPlateText, Palette.StandPlate)
 	-- Invisible anchor for the floating illustration and effects (client-side).
 	local anchor = WorldBuilder.part({
 		Name = "Anchor",

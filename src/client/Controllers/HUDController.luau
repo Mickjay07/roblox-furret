@@ -108,6 +108,8 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 		Parent = row,
 	})
 	local art = row:FindFirstChild("Art") :: ImageLabel
+	-- The money text is a child of the art, so it moves and scales with it and stays on the
+	-- green field whichever layout path below is used.
 	local label: TextLabel = Create("TextLabel", {
 		Name = "Cash",
 		Text = "0",
@@ -124,7 +126,7 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 		TextYAlignment = Enum.TextYAlignment.Center,
 		Active = false,
 		ZIndex = 2,
-		Parent = row,
+		Parent = art,
 	}, {
 		-- TextScaled shrinks long values (millions, billions) to fit; these keep short values
 		-- from growing huge and long ones readable.
@@ -135,14 +137,23 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
 		}),
 	})
+	-- Fallback until (or unless) the real pixels are known: shift the art left by the
+	-- configured fraction so it doesn't start with an empty gap.
+	art.Position = UDim2.fromScale(layout.FallbackOffsetX, 0)
 	-- Once the art's real pixels are known: crop away transparent margins (so the bar starts
 	-- right at the panel's left edge instead of being letterboxed), use its true aspect, and
 	-- put the text exactly on the detected green field.
 	ImageBounds.get("ui.currency_bar", image, true, function(measurement)
-		if not measurement or not row.Parent then
+		if not row.Parent then
 			return
 		end
+		if not measurement then
+			ImageBounds.report("ui.currency_bar", "fallback (Config.Visuals.Hud.CurrencyBar.FallbackOffsetX)")
+			return
+		end
+		ImageBounds.report("ui.currency_bar", "measured and cropped")
 		ImageBounds.crop(art, measurement)
+		art.Position = UDim2.fromScale(0, 0)
 		row.Size = UDim2.fromOffset(layout.Width, layout.Width / ImageBounds.aspect(measurement))
 		local green = measurement.Green
 		if green then
@@ -351,21 +362,29 @@ local function buildRightRail(gui: ScreenGui)
 			-- Centre each icon on the same vertical axis so the column lines up.
 			button.AnchorPoint = Vector2.new(0.5, 0.5)
 			button.Position = UDim2.new(0.5, 0, 0, iconSize / 2)
+			-- The hit area stays a fixed square; only the art inside is cropped or scaled.
+			local art = button:FindFirstChild("Art") :: ImageLabel
 			local manual = Config.Visuals.Hud.IconScale[entry.icon] or 1
-			local function applySize(balance: number)
-				local size = math.min(maxIcon, math.floor(iconSize * balance * manual))
-				button.Size = UDim2.fromOffset(size, size)
+			local function applyArtScale(factor: number)
+				local k = factor * manual
+				art.Size = UDim2.fromScale(k, k)
 			end
-			applySize(1)
+			-- Until measured (or if measuring isn't allowed): the configured fallback scale.
+			applyArtScale(Config.Visuals.Hud.IconScaleFallback[entry.icon] or 1)
 			-- Crop to the visible art, then give wide or tall art a little more room so its
 			-- visible area matches the square icons (Fit shrinks a non-square image).
 			ImageBounds.get(entry.icon, image, false, function(measurement)
-				if not measurement or not button.Parent then
+				if not button.Parent then
 					return
 				end
-				ImageBounds.crop(button, measurement)
+				if not measurement then
+					ImageBounds.report(entry.icon, "fallback (Config.Visuals.Hud.IconScaleFallback)")
+					return
+				end
+				ImageBounds.report(entry.icon, "measured and cropped")
+				ImageBounds.crop(art, measurement)
 				local aspect = ImageBounds.aspect(measurement)
-				applySize(math.clamp(math.sqrt(math.max(aspect, 1 / aspect)), 1, 1.25))
+				applyArtScale(math.clamp(math.sqrt(math.max(aspect, 1 / aspect)), 1, 1.25))
 			end)
 		else
 			ArtDiagnostics.fallback("HUD", entry.icon)

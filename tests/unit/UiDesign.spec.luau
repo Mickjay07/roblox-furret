@@ -147,3 +147,46 @@ describe("UiLayout: upgrade and price wording", function()
 		expect(UiLayout.shortfall(0, 2500000)).toBe("NEED $2.5M")
 	end)
 end)
+
+describe("HUD fallbacks when artwork can't be measured", function()
+	local hud = Config.Visuals.Hud
+
+	it("enlarges the backpack art (larger transparent margins) and nothing else by default", function()
+		local backpack = hud.IconScaleFallback["ui.icon.backpack"]
+		expect(backpack).toBeNear(1.4, 1e-9)
+		for key, scale in hud.IconScaleFallback do
+			expect(Config.Assets.Images[key] ~= nil).toBe(true)
+			expect(scale >= 0.5 and scale <= 2).toBe(true)
+		end
+		expect(hud.IconScaleFallback["ui.icon.binder"]).toBeNil()
+	end)
+
+	it("shifts the currency bar art left by a small fraction, never right", function()
+		local offset = hud.CurrencyBar.FallbackOffsetX
+		expect(offset <= 0).toBe(true)
+		expect(offset >= -0.3).toBe(true)
+	end)
+
+	it("pins no measured bounds by default (measured values are pasted in only after a Studio run)", function()
+		expect(next(hud.ImageBounds)).toBeNil()
+	end)
+end)
+
+describe("Display stand palette", function()
+	it("defines every colour the stand builder and PlotService use", function()
+		local world = Config.Visuals.World
+		for _, key in
+			{
+				"Pedestal",
+				"PedestalLocked",
+				"PedestalBase",
+				"PedestalRim",
+				"PedestalGlow",
+				"StandPlate",
+				"StandPlateText",
+			}
+		do
+			expect(world[key] ~= nil).toBe(true)
+		end
+	end)
+end)

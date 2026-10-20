@@ -185,21 +185,33 @@ export type IconButtonProps = {
 	OnClick: (() -> ())?,
 }
 
--- Image button for custom HUD artwork: the ImageButton itself takes the click; the image
--- keeps its own aspect ratio (ScaleType.Fit) inside a square slot; the optional caption is
--- a plain TextLabel, which never takes input.
+-- Image button for custom HUD artwork. The transparent ImageButton is a fixed square hit
+-- area; the artwork is a separate ImageLabel child named "Art" (ScaleType.Fit, so it keeps
+-- its aspect ratio), which can be cropped or scaled to balance different transparent
+-- margins without changing where the button can be clicked. The optional caption is a plain
+-- TextLabel, which never takes input.
 function Components.iconButton(props: IconButtonProps): ImageButton
 	local scale = Create("UIScale", { Scale = 1 })
 	-- Square slot for the art; the caption (if any) hangs just below it.
 	local button: ImageButton = Create("ImageButton", {
 		Name = props.Name or props.Caption or "Icon",
-		Image = props.Image,
-		ScaleType = Enum.ScaleType.Fit,
+		Image = "",
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Size = UDim2.fromOffset(props.Size, props.Size),
 		LayoutOrder = props.LayoutOrder or 0,
 	}, { scale })
+	Create("ImageLabel", {
+		Name = "Art",
+		Image = props.Image,
+		ScaleType = Enum.ScaleType.Fit,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Active = false,
+		Parent = button,
+	})
 	if props.Caption then
 		local captionHeight = math.floor(props.Size * 0.24)
 		local caption = Components.label({
