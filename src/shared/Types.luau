@@ -31,6 +31,8 @@ export type CollectionDef = {
 	Color: Color3,
 	-- Permanent global income bonus once every card in the collection is discovered.
 	CompletionIncomeBonus: number,
+	-- Not shown in the Binder or counted in overall progress (e.g. unreleased promo sets).
+	Hidden: boolean?,
 }
 
 export type UnlockRequirement = {
@@ -52,6 +54,8 @@ export type CardDef = {
 	-- Variant ids this card can roll as. Nil means every variant.
 	Variants: { string }?,
 	Unlock: UnlockRequirement?,
+	-- True while name / rarity / income are placeholders waiting for the owner's values.
+	Placeholder: boolean?,
 }
 
 export type PackDef = {
@@ -68,6 +72,10 @@ export type PackDef = {
 	Color: Color3,
 	Artwork: string,
 	Unlock: UnlockRequirement?,
+	-- Not listed in or sold by the cash Pack Shop (premium / Robux-only packs).
+	ShopHidden: boolean?,
+	-- Asset key of the card back shown for this pack's cards (default: Config.Assets card.back).
+	CardBack: string?,
 }
 
 export type UpgradeDef = {

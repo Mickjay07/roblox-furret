@@ -4,6 +4,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -12,6 +13,7 @@ local CardArt = require(Shared.Logic.CardArt)
 local Economy = require(Shared.Logic.Economy)
 local IncomeLedger = require(Shared.Logic.IncomeLedger)
 local Progression = require(Shared.Logic.Progression)
+local UiLayout = require(Shared.Logic.UiLayout)
 local Remotes = require(Shared.Remotes)
 local Format = require(Shared.Util.Format)
 
@@ -168,7 +170,7 @@ local function buildCashRow(panel: Frame): (Frame, TextLabel)
 	return row, label
 end
 
-local function buildStats(gui: ScreenGui)
+local function buildStats(gui: ScreenGui): (Frame, UIScale)
 	local barLayout = Config.Visuals.Hud.CurrencyBar
 	local hasBar = CardArt.image("ui.currency_bar") ~= nil
 	local width = if hasBar then math.max(320, barLayout.Width) else 320
@@ -187,7 +189,8 @@ local function buildStats(gui: ScreenGui)
 			Padding = UDim.new(0, 6),
 		}),
 	})
-	Components.autoScale(panel)
+	-- Scale and vertical placement are set by applyPlacement (HUDController:Start).
+	local statsScale = Create("UIScale", { Scale = Components.screenScale(), Parent = panel })
 
 	local function row(order: number, height: number): Frame
 		return Create("Frame", {
@@ -387,6 +390,7 @@ local function buildStats(gui: ScreenGui)
 	end
 	DataController:Observe("Progression", refreshLevel)
 	DataController:Observe("Income", refreshPending)
+	return panel, statsScale
 end
 
 local function buildTopNav(gui: ScreenGui)
@@ -420,7 +424,7 @@ local function buildTopNav(gui: ScreenGui)
 	end
 end
 
-local function buildRightRail(gui: ScreenGui)
+local function buildRightRail(gui: ScreenGui): (Frame, UIScale)
 	local iconSize = Config.Visuals.Hud.IconSize
 	local captions = Config.Visuals.Hud.ShowCaptions
 	-- Icons may grow up to 25% to balance their visible area (see below).
@@ -442,7 +446,7 @@ local function buildRightRail(gui: ScreenGui)
 			Padding = UDim.new(0, 10),
 		}),
 	})
-	Components.autoScale(rail)
+	local railScale = Create("UIScale", { Scale = Components.screenScale(), Parent = rail })
 	for i, entry in RIGHT_NAV do
 		local image = CardArt.image(entry.icon)
 		if image then
@@ -494,10 +498,11 @@ local function buildRightRail(gui: ScreenGui)
 			end)
 		else
 			ArtDiagnostics.fallback("HUD", entry.icon)
+			-- Same slot size as the image entries, so the column stays evenly spaced.
 			Components.button({
 				Text = entry.text,
 				Style = entry.style,
-				Size = UDim2.fromOffset(112, 76),
+				Size = UDim2.fromOffset(railWidth, slot),
 				LayoutOrder = i,
 				Parent = rail,
 				OnClick = function()
@@ -506,20 +511,55 @@ local function buildRightRail(gui: ScreenGui)
 			})
 		end
 	end
+	return rail, railScale
+end
+
+-- Touch-only devices get the Roblox thumbstick and jump button in the bottom corners.
+local function isTouch(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 end
 
 function HUDController:Start()
 	local gui = Create("ScreenGui", {
 		Name = "HUD",
 		ResetOnSpawn = false,
-		-- Keep the HUD clear of notches, rounded corners and the home indicator on phones.
-		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
+		-- Keep the HUD clear of the Roblox top bar buttons as well as notches, rounded
+		-- corners and the home indicator on phones.
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
-	buildStats(gui)
+	local stats, statsScale = buildStats(gui)
 	buildTopNav(gui)
-	buildRightRail(gui)
+	local rail, railScale = buildRightRail(gui)
+
+	-- Placement follows the screen (Logic/UiLayout.hudPlacement): centred on desktop, from
+	-- the top on touch screens so the thumbstick and jump button stay clear. Heights are
+	-- measured unscaled, so nothing depends on one resolution.
+	local margin = Config.Visuals.Hud.LeftMargin
+	local function applyPlacement()
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local viewport = gui.AbsoluteSize
+		if viewport.X <= 0 or viewport.Y <= 0 then
+			viewport = camera.ViewportSize
+		end
+		local statsHeight = stats.AbsoluteSize.Y / math.max(statsScale.Scale, 0.01)
+		local placement =
+			UiLayout.hudPlacement(viewport, isTouch(), Components.screenScale(), statsHeight, rail.Size.Y.Offset, 64)
+		statsScale.Scale = placement.StatsScale
+		railScale.Scale = placement.RailScale
+		stats.AnchorPoint = Vector2.new(0, placement.StatsAnchorY)
+		stats.Position = UDim2.new(0, margin, placement.StatsAnchorY, placement.StatsY)
+		rail.AnchorPoint = Vector2.new(1, placement.RailAnchorY)
+		rail.Position = UDim2.new(1, -16, placement.RailAnchorY, placement.RailY)
+	end
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyPlacement)
+	stats:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyPlacement)
+	UserInputService.LastInputTypeChanged:Connect(applyPlacement)
+	applyPlacement()
 end
 
 return HUDController

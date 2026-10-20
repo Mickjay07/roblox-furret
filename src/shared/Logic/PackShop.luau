@@ -63,6 +63,10 @@ function PackShop.buy(data: Types.PlayerData, packId: string, amount: number): (
 	if not pack then
 		return false, "That pack doesn't exist"
 	end
+	if pack.ShopHidden then
+		-- Premium packs are only granted (Robux products, rewards), never sold for currency.
+		return false, "That pack isn't sold for Cash"
+	end
 	if not validAmount(amount) then
 		return false, "Invalid amount"
 	end

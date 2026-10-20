@@ -16,6 +16,10 @@ local Remotes = {
 		-- Multi Opening unlocks) -> { packs, cardsPerPack, cards = { RevealCard },
 		-- levelsGained, treatsGained }. Repeating a requestId returns the same result.
 		OpenPack = "OpenPack",
+		-- (requestId) Open All game pass: opens every owned pack (all types, up to
+		-- Limits.MaxOpenAll and the free backpack space) -> same shape as OpenPack plus
+		-- { opened = { [packId] = n }, leftOver }. Repeating a requestId replays the result.
+		OpenAllPacks = "OpenAllPacks",
 		-- (passKey) asks the server to prompt a game pass (VIP, 2x AFK, Multi Opening...); the
 		-- server checks prerequisites first. Ownership is only ever set from UserOwnsGamePassAsync.
 		PromptGamePass = "PromptGamePass",

@@ -21,6 +21,15 @@ local list: { Types.CollectionDef } = {
 	collection("Shore", "Sandy Shores", 4, Color3.fromRGB(80, 200, 230), 0.08),
 	collection("Cosmic", "Cosmic Scampers", 5, Color3.fromRGB(110, 90, 230), 0.12),
 	collection("Midnight", "Midnight Mischief", 6, Color3.fromRGB(70, 50, 110), 0.15),
+	-- Promo Ferrets (#100-#110). Hidden until the owner confirms the card data (Config.Cards).
+	table.freeze({
+		Id = "Promo",
+		DisplayName = "Promo Ferrets",
+		Order = 50,
+		Color = Color3.fromRGB(255, 120, 200),
+		CompletionIncomeBonus = 0,
+		Hidden = true,
+	}),
 }
 
 local byId: { [string]: Types.CollectionDef } = {}

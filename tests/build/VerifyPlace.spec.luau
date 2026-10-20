@@ -77,6 +77,7 @@ describe("built place", function()
 		{ path = { "ServerScriptService", "Server", "Lib", "GamePassOwnership" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "ReceiptProcessor" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "Products" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "ShopView" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Util", "Dedupe" }, class = "ModuleScript" },
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "PackOpening" }, class = "ModuleScript" },
 		{

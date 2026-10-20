@@ -435,8 +435,8 @@ The place must be **published**; purchases in Studio are test purchases.
       (2039938706) and the three pack products (3720277269 / 3720277334 / 3720277406, with
       `design says 75/199/499` warnings if the website prices differ).
 - [ ] PERMANENT PASSES: VIP (art 108576806919415), 2x AFK Time Cash (no art: letter badge),
-      Open 3 (137191381736886), Open 6 (120349601099983), Open All (71884954923271) shows
-      `COMING SOON` (no game pass id configured).
+      Open 3 (137191381736886), Open 6 (120349601099983), Open All (71884954923271,
+      game pass 2041988567) with `BUY  R$<price>`.
 - [ ] Buying VIP: no success toast before Roblox confirms; after the test purchase the toast
       says `VIP activated!`, the card shows `OWNED`, and the HUD `CASH/S` rises by 25%.
 - [ ] Cancel any prompt: nothing changes, no toast.
@@ -469,6 +469,46 @@ The place must be **published**; purchases in Studio are test purchases.
       `Config.Visuals.Hud.LevelBar` (`FillInset*`, `Aspect`, `FillAboveArt`).
 - [ ] Collect: the collect art (128905277992791) with the pending amount beside it
       (`$1.2K`, or `NOTHING YET` faded); clicking it collects every stand.
+
+### 1.23 Open All game pass
+- [ ] Server Output at start: `[Monetization] Open All (game pass 2041988567) ...` line.
+- [ ] Without the pass: Backpack > PACKS shows a purple `OPEN ALL - LOCKED` button that opens
+      the Shop. `...Remotes.OpenAllPacks:InvokeServer("probe-1")` returns `Unlock Open All
+      first` and no packs are consumed.
+- [ ] Buy Open All (test purchase): no success before Roblox confirms; then the toast says
+      `Open All activated!`, the Shop card shows `OWNED` and the Backpack button turns gold
+      `OPEN ALL (n)`. Cancelling the prompt changes nothing. Rejoin: still owned.
+- [ ] With packs of two types in the bag (e.g. DEV `givepack pack1 12` and another pack),
+      `OPEN ALL` opens all of them (up to 25) and shows the summary of every card; CLAIM ALL
+      closes it; the bag is empty and the cards are in the backpack.
+- [ ] More than 25 packs, or a nearly full backpack: the toast says how many stayed in the bag.
+- [ ] No packs: `You have no packs to open` toast, nothing sent.
+- [ ] Double-clicking OPEN ALL opens once.
+
+### 1.24 Premium Shop layout (desktop 1920x1080, 1280x720, phone portrait and landscape)
+- [ ] The ribbon reads `EXCLUSIVE SHOP` with the shop icon; X closes it; reopening works.
+- [ ] Featured panel: pack art left, a sideways-scrolling row of the pack's cards, the chase
+      card highlighted on the right, and three purchase buttons (`1 PACK · R$ 75`,
+      `3 PACKS · R$ 199`, `10 PACKS · R$ 499`) with an odds line; nothing overlaps.
+- [ ] No `LIMITED TIME` badge or chip while no limited bundle is configured; the limited
+      section reads `No limited offers right now`.
+- [ ] Passes: five cards in a 3-column grid; each shows icon, name, benefit, a status line
+      and a button inside the card. Owned passes show `OWNED` with `Active`; Open 6 without
+      Open 3 shows `LOCKED` with the reason.
+- [ ] Robux packs: three equal cards; `10 PACKS` and `R$ 499` are fully readable.
+- [ ] `COMING SOON: PROMO FERRETS #100-#110` shows the eleven promo card images with their
+      numbers (art only).
+- [ ] The whole shop scrolls vertically without clipping the last section.
+
+### 1.25 Main HUD placement
+- [ ] Desktop: stats panel (cash bar, CASH/S, treats, level bar, collect) centred on the
+      left; the right rail (Shop, Bag, Binder, Upgrades, Settings) centred on the right, all
+      five the same slot size; top buttons the same size and spacing; nothing under the
+      Roblox top-bar buttons.
+- [ ] Phone landscape and portrait (Device emulator): stats and rail start at the top
+      (portrait: below the top buttons) and end above the thumbstick and jump button.
+- [ ] Level bar: `LV n` matches DEV `setlevel`; the fill grows with XP and stays inside the
+      bar art (adjust `Config.Visuals.Hud.LevelBar` if not).
 
 ## Part 2: specification features (run when implemented)
 

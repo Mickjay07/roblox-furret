@@ -3,6 +3,40 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-20: Open All, Premium Shop redesign, Promo Ferret pack, responsive HUD
+
+- **Inputs:** the screenshots mentioned in the request were not attached to the
+  conversation, so this pass works from the written requirements and the code.
+- **Open All (game pass 2041988567):**
+  - `PackOpenRequests.openAll` opens every owned pack, across pack types, up to
+    `Limits.MaxOpenAll` (25) and the free backpack space.
+  - The plan is computed before anything changes; packs that don't fit stay in the bag.
+  - Same request-id replay protection as `OpenPack`.
+  - New `OpenAllPacks` remote; `PackReveal.summary` shows every card, then CLAIM ALL.
+  - Backpack > PACKS has the OPEN ALL button (locked: opens the Shop).
+- **Premium Shop redesign:**
+  - Card states come from a new pure module, `Logic/ShopView`. OWNED only after the server's
+    Roblox check; CHECKING / RETRYING while it runs or fails.
+  - Layout: a featured pack (art, scrolling card row, chase card, 1/3/10 buy buttons and
+    odds), a passes grid, a separate limited-time panel (badge only when an offer is live),
+    three aligned Robux pack cards, and a Promo Ferret "coming soon" row.
+- **Promo Ferret pack:**
+  - Cards `promo_100`…`promo_110` use the uploaded art; pack `promo_ferrets` uses wrapper
+    118924487824692 and card back 121661874661575 (new `PackDef.CardBack`).
+  - The collection is hidden in the Binder, and the pack is not sold for Cash.
+  - Names, rarities and incomes are **placeholders** (`Placeholder = true`): none were
+    provided and the art can't be read from the cloud session.
+  - Owner decision: the Robux products keep granting Pack 1 (`Monetization.PremiumPackId`)
+    until the real card data is supplied.
+- **HUD:**
+  - The HUD uses `CoreUISafeInsets`, so it stays clear of the Roblox top bar.
+  - `UiLayout.hudPlacement` centres the stats and rail on desktop and starts them at the
+    top on touch screens (under the top buttons in portrait), ending above the bottom 38%
+    (thumbstick and jump).
+  - Text fallbacks in the right rail use the same slot size as icons.
+- **Verification:** `./scripts/check.sh` passed (339 Lune tests). Nothing was run in Roblox
+  Studio; see docs/TESTING.md §1.23–1.25.
+
 ## 2026-10-20: Upgrade prices, Premium Shop, Robux packs and the pack inventory
 
 - **Upgrade affordability bug (root cause):** the maths was right; the label was wrong.

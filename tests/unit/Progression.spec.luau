@@ -56,7 +56,15 @@ describe("Collections", function()
 		expect(progress.Complete).toBe(false)
 		local found, total = Collections.overall(data)
 		expect(found).toBe(1)
-		expect(total).toBe(#Config.Cards.List)
+		-- Hidden collections (the unreleased Promo set) are left out of the overall total.
+		local visible = 0
+		for _, def in Config.Cards.List do
+			if not Config.Collections.ById[def.Collection].Hidden then
+				visible += 1
+			end
+		end
+		expect(total).toBe(visible)
+		expect(visible).toBe(#Config.Cards.List - 11)
 		expect(#Collections.all(data)).toBe(#Config.Collections.List)
 	end)
 end)

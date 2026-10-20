@@ -78,6 +78,7 @@ local onClosed: (() -> ())? = nil
 -- Current opening.
 local plan: RevealPlan.Plan? = nil
 local currentCards: { RevealCard } = {}
+local currentPack: Types.PackDef? = nil
 local columns: { Column } = {}
 local layout: Layout
 local effects: { Instance } = {}
@@ -253,7 +254,7 @@ local function buildColumns(packs: number)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	local backImage = CardArt.back()
+	local backImage = CardArt.backFor(currentPack)
 	for p = 1, packs do
 		local frame = Create("Frame", {
 			Name = "Pack" .. p,
@@ -340,7 +341,7 @@ local function buildColumns(packs: number)
 end
 
 local function showBack(column: Column)
-	local backImage = CardArt.back()
+	local backImage = CardArt.backFor(currentPack)
 	column.face.Image = backImage or ""
 	column.face.Visible = true
 	column.drawnBack.Visible = backImage == nil
@@ -905,6 +906,7 @@ function PackReveal.play(
 	local packCount = math.max(1, packs or 1)
 	local perPack = cardsPerPack or pack.CardsPerOpen
 	currentCards = cards
+	currentPack = pack
 	plan = RevealPlan.new(cards, packCount, perPack)
 	layout = layoutFor(packCount)
 	clearStage()
@@ -914,7 +916,7 @@ function PackReveal.play(
 
 	-- Start downloading this opening's card art now, while the packs animate.
 	local ids = {}
-	local back = CardArt.back()
+	local back = CardArt.backFor(pack)
 	if back then
 		table.insert(ids, back)
 	end
@@ -939,6 +941,43 @@ function PackReveal.play(
 	roundLabel = stageLabel("", 0, 40, Theme.Colors.Muted)
 	buildColumns(packCount)
 	task.spawn(intro, token, pack, packCount)
+end
+
+-- Open All: many packs at once, so the scene skips the per-card rounds and shows the
+-- summary of every card straight away (scrollable), then CLAIM ALL. Purely visual too.
+function PackReveal.summary(cards: { RevealCard }, closed: (() -> ())?)
+	if not gui then
+		build()
+	end
+	local screen = gui :: ScreenGui
+	session += 1
+	onClosed = closed
+	busy = false
+	currentCards = cards
+	-- A plan that goes straight to its summary phase, so CLAIM ALL closes the scene.
+	plan = RevealPlan.new(cards, 1, math.max(1, #cards))
+	layout = layoutFor(6)
+	clearStage()
+	stage.Position = UDim2.fromScale(0.5, 0.5)
+	screen.Enabled = true
+	local ids = {}
+	for _, card in cards do
+		local def = CardRegistry.get(card.CardId)
+		local image = if def then frontImage(def) else nil
+		if image and not table.find(ids, image) then
+			table.insert(ids, image)
+		end
+	end
+	ImagePreloader.preload(ids, "open all")
+	if not blur then
+		local effect = Instance.new("BlurEffect")
+		effect.Name = "PackRevealBlur"
+		effect.Size = 0
+		effect.Parent = Lighting
+		blur = effect
+		play(effect, 0.3, { Size = 18 })
+	end
+	showSummary()
 end
 
 -- Closes the scene (CLAIM ALL). Safe to call any time; the cards were granted already.

@@ -30,6 +30,7 @@ return table.freeze({
 		UpdateSetting = table.freeze({ Rate = 3, Burst = 6 }),
 		BuyPack = table.freeze({ Rate = 2, Burst = 4 }),
 		OpenPack = table.freeze({ Rate = 2, Burst = 4 }),
+		OpenAllPacks = table.freeze({ Rate = 0.5, Burst = 2 }),
 		PromptGamePass = table.freeze({ Rate = 0.5, Burst = 2 }),
 		PromptProduct = table.freeze({ Rate = 0.5, Burst = 2 }),
 		CollectEarnings = table.freeze({ Rate = 8, Burst = 16 }),
@@ -45,6 +46,8 @@ return table.freeze({
 
 	Limits = table.freeze({
 		MaxPacksPerPurchase = 10,
+		-- Open All game pass: most packs opened by one click (the summary shows every card).
+		MaxOpenAll = 25,
 		MaxCardsPerSell = 50,
 		MaxIdLength = 64,
 	}),

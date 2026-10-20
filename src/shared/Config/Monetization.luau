@@ -17,7 +17,15 @@
 -- (InfoType.GamePass for passes, InfoType.Product for products) and published for the UI;
 -- ExpectedPriceRobux is the owner's intended price, compared and logged on mismatch.
 
+-- The pack the Robux pack products (1 / 3 / 10) grant. Owner decision (2026-10-20): keep
+-- Pack 1 until the Promo Ferret card data (#100-#110: names, rarities, incomes) is confirmed;
+-- then set this to "promo_ferrets" (Config.Packs) and the products, the Shop's featured
+-- section and the odds all switch to the Promo Ferret Pack.
+local PREMIUM_PACK = "pack1"
+
 return table.freeze({
+	PremiumPackId = PREMIUM_PACK,
+
 	-- Permanent passes other than Multi Opening.
 	GamePasses = table.freeze({
 		VIP = table.freeze({
@@ -44,10 +52,10 @@ return table.freeze({
 		}),
 		OpenAll = table.freeze({
 			Key = "OpenAll",
-			-- No game pass id has been provided yet: shown as unavailable, never sold.
-			GamePassId = 0,
+			-- Opens every pack in the pack inventory at once (PackOpenRequests.openAll).
+			GamePassId = 2041988567,
 			DisplayName = "Open All",
-			Description = "Open every pack in your bag at once",
+			Description = "Open every pack in your bag with one click",
 			Icon = "ui.shop.open_all" :: string?,
 			Order = 5,
 			ExpectedPriceRobux = nil :: number?,
@@ -86,33 +94,33 @@ return table.freeze({
 			Key = "Packs1",
 			ProductId = 3720277269,
 			DisplayName = "1 Pack",
-			Description = "1 Pack 1 booster, straight to your bag",
-			Icon = "pack.pack1.front" :: string?,
+			Description = "1 premium pack, straight to your bag",
+			Icon = nil :: string?,
 			Section = "Packs",
 			Order = 1,
-			Grants = table.freeze({ Packs = table.freeze({ pack1 = 1 }) }),
+			Grants = table.freeze({ Packs = table.freeze({ [PREMIUM_PACK] = 1 }) }),
 			ExpectedPriceRobux = 75 :: number?,
 		}),
 		Packs3 = table.freeze({
 			Key = "Packs3",
 			ProductId = 3720277334,
 			DisplayName = "3 Packs",
-			Description = "3 Pack 1 boosters, straight to your bag",
-			Icon = "pack.pack1.front" :: string?,
+			Description = "3 premium packs, straight to your bag",
+			Icon = nil :: string?,
 			Section = "Packs",
 			Order = 2,
-			Grants = table.freeze({ Packs = table.freeze({ pack1 = 3 }) }),
+			Grants = table.freeze({ Packs = table.freeze({ [PREMIUM_PACK] = 3 }) }),
 			ExpectedPriceRobux = 199 :: number?,
 		}),
 		Packs10 = table.freeze({
 			Key = "Packs10",
 			ProductId = 3720277406,
 			DisplayName = "10 Packs",
-			Description = "10 Pack 1 boosters, straight to your bag",
-			Icon = "pack.pack1.front" :: string?,
+			Description = "10 premium packs, straight to your bag",
+			Icon = nil :: string?,
 			Section = "Packs",
 			Order = 3,
-			Grants = table.freeze({ Packs = table.freeze({ pack1 = 10 }) }),
+			Grants = table.freeze({ Packs = table.freeze({ [PREMIUM_PACK] = 10 }) }),
 			ExpectedPriceRobux = 499 :: number?,
 		}),
 		TreatsSmall = table.freeze({

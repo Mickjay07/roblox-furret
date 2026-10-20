@@ -21,6 +21,7 @@ local Types = require(Shared.Types)
 local Config = require(Shared.Config)
 local Economy = require(Shared.Logic.Economy)
 local Entitlements = require(Shared.Logic.Entitlements)
+local Inventory = require(Shared.Logic.Inventory)
 local PackShop = require(Shared.Logic.PackShop)
 
 export type RevealCard = {
@@ -46,6 +47,9 @@ export type Response = {
 	cards: { RevealCard }?,
 	levelsGained: number?,
 	treatsGained: number?,
+	-- Open All only: packs opened per pack id, and owned packs left unopened (no space / cap).
+	opened: { [string]: number }?,
+	leftOver: number?,
 }
 
 type PlayerLog = { order: { string }, byId: { [string]: Response } }
@@ -61,6 +65,14 @@ export type Ledger = {
 		requestId: string,
 		ctx: PackShop.Context,
 		packs: number?
+	) -> (Response, PackShop.Opening?),
+	openAll: (
+		self: Ledger,
+		data: Types.PlayerData,
+		userId: number,
+		requestId: string,
+		ctx: PackShop.Context,
+		cap: number
 	) -> (Response, PackShop.Opening?),
 	forget: (self: Ledger, userId: number) -> (),
 	remembered: (self: Ledger, userId: number) -> number,
@@ -144,6 +156,115 @@ local function open(
 	return response, opening
 end
 
+-- Open All (game pass): opens every owned pack in the pack inventory - all pack types, in
+-- Config.Packs order - up to `cap` packs and as many as the backpack has room for. The plan
+-- is computed before anything changes; packs that don't fit stay in the inventory. Same
+-- request-id idempotency as `open`. Returns one merged Opening for replication.
+local function openAll(
+	self: Ledger,
+	data: Types.PlayerData,
+	userId: number,
+	requestId: string,
+	ctx: PackShop.Context,
+	cap: number
+): (Response, PackShop.Opening?)
+	local log = self.players[userId]
+	local previous = if log then log.byId[requestId] else nil
+	if previous then
+		return previous, nil
+	end
+	if not Entitlements.canOpenAll(data) then
+		return { ok = false, error = "Unlock Open All first" }, nil
+	end
+
+	local owned, free, remaining = 0, Inventory.freeSpace(data), math.max(0, math.floor(cap))
+	local plan: { { pack: Types.PackDef, count: number } } = {}
+	for _, pack in Config.Packs.List do
+		local have = PackShop.owned(data, pack.Id)
+		owned += have
+		local count = math.min(have, remaining, math.floor(free / pack.CardsPerOpen))
+		if count > 0 then
+			table.insert(plan, { pack = pack, count = count })
+			free -= count * pack.CardsPerOpen
+			remaining -= count
+		end
+	end
+	if owned == 0 then
+		return { ok = false, error = "You have no packs to open - buy some in the Pack Shop" }, nil
+	end
+	if #plan == 0 then
+		return { ok = false, error = "Not enough backpack space - sell or display some cards" }, nil
+	end
+
+	local merged: PackShop.Opening = {
+		PackId = plan[1].pack.Id,
+		Amount = 0,
+		Cards = {},
+		XpGained = 0,
+		LevelsGained = 0,
+		TreatsGained = 0,
+		NewInstanceIds = {},
+		DiscoveredIds = {},
+	}
+	local cards: { RevealCard } = {}
+	local opened: { [string]: number } = {}
+	local packNumber = 0
+	local chunk = Config.Game.Limits.MaxPacksPerPurchase
+	for _, entry in plan do
+		local left = entry.count
+		while left > 0 do
+			local n = math.min(left, chunk)
+			local ok, result = PackShop.open(data, entry.pack.Id, n, ctx)
+			-- Counts and space were checked above, so this cannot fail.
+			assert(ok, `PackOpenRequests.openAll: {result}`)
+			local opening: PackShop.Opening = result
+			local perPack = entry.pack.CardsPerOpen
+			for index, card in opening.Cards do
+				local instance = data.Cards[card.InstanceId]
+				table.insert(merged.Cards, card)
+				table.insert(cards, {
+					InstanceId = card.InstanceId,
+					CardId = card.CardId,
+					Variant = card.Variant,
+					IsNew = card.IsNew,
+					OneIn = card.OneIn,
+					Income = if instance then Economy.cardIncome(instance) else 0,
+					Pack = packNumber + (index - 1) // perPack + 1,
+					Slot = (index - 1) % perPack + 1,
+				})
+			end
+			packNumber += n
+			merged.Amount += n
+			merged.XpGained += opening.XpGained
+			merged.LevelsGained += opening.LevelsGained
+			merged.TreatsGained += opening.TreatsGained
+			for _, id in opening.NewInstanceIds do
+				table.insert(merged.NewInstanceIds, id)
+			end
+			for _, id in opening.DiscoveredIds do
+				if not table.find(merged.DiscoveredIds, id) then
+					table.insert(merged.DiscoveredIds, id)
+				end
+			end
+			opened[entry.pack.Id] = (opened[entry.pack.Id] or 0) + n
+			left -= n
+		end
+	end
+	local response: Response = {
+		ok = true,
+		packId = merged.PackId,
+		requestId = requestId,
+		packs = merged.Amount,
+		cards = cards,
+		levelsGained = merged.LevelsGained,
+		treatsGained = merged.TreatsGained,
+		opened = opened,
+		leftOver = owned - merged.Amount,
+	}
+	remember(self, userId, requestId, response)
+	return response, merged
+end
+
 local function forget(self: Ledger, userId: number)
 	self.players[userId] = nil
 end
@@ -158,6 +279,7 @@ function PackOpenRequests.new(limit: number?): Ledger
 		limit = limit or DEFAULT_LIMIT,
 		players = {},
 		open = open,
+		openAll = openAll,
 		forget = forget,
 		remembered = remembered,
 	}

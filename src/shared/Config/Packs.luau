@@ -148,6 +148,33 @@ local list: { Types.PackDef } = {
 		Artwork = "",
 		Unlock = { Level = 14 },
 	},
+	-- Promo Ferret Pack: cards #100-#110 (collection "Promo"). Premium pack: never sold in
+	-- the cash Pack Shop (ShopHidden); Robux products grant it once Config.Monetization
+	-- PremiumPackId points here. Price only feeds the config sanity checks.
+	{
+		Id = "promo_ferrets",
+		DisplayName = "Promo Ferret Pack",
+		Description = "The Promo Ferret collection, cards #100-#110.",
+		Order = 50,
+		Price = 100000,
+		Currency = "Cash",
+		CardsPerOpen = 5,
+		Collections = { "Promo" },
+		RarityWeights = {
+			Common = 520,
+			Uncommon = 270,
+			Rare = 140,
+			Epic = 50,
+			Legendary = 15,
+			Mythic = 4,
+			Secret = 1,
+		},
+		Xp = 10,
+		Color = Color3.fromRGB(255, 120, 200),
+		Artwork = "pack.promo.front",
+		ShopHidden = true,
+		CardBack = "card.promo.back",
+	},
 }
 
 local byId: { [string]: Types.PackDef } = {}

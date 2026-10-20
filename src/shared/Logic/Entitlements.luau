@@ -103,6 +103,12 @@ function Entitlements.canUseMode(data: Types.PlayerData, packs: number): boolean
 	return false
 end
 
+-- Can this player use Open All (the pass is owned and confirmed by Roblox)?
+function Entitlements.canOpenAll(data: Types.PlayerData): boolean
+	local product = PASSES.OpenAll
+	return product ~= nil and product.GamePassId > 0 and usable(data, product)
+end
+
 -- Opening sizes this player can use, e.g. { 1, 3 }.
 function Entitlements.modes(data: Types.PlayerData): { number }
 	local modes = { 1 }

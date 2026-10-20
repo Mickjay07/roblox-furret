@@ -430,6 +430,45 @@ local function renderPacks(data: Types.PlayerData)
 		end
 	end
 	Components.setChipText(capacityChip, `{Format.commas(total)} PACK{if total == 1 then "" else "S"}`)
+	if total > 0 then
+		-- Open All (game pass): every pack in the bag with one click; locked -> the Shop.
+		local bar = Create("Frame", {
+			Name = "OpenAllBar",
+			Size = UDim2.new(1, -12, 0, 56),
+			BackgroundTransparency = 1,
+			LayoutOrder = 0,
+			Parent = packsList,
+		})
+		local unlocked = Entitlements.canOpenAll(data)
+		local cap = Config.Game.Limits.MaxOpenAll
+		Components.button({
+			Text = if unlocked then `OPEN ALL ({math.min(total, cap)})` else "OPEN ALL  -  LOCKED",
+			Style = if unlocked then "Gold" else "Purple",
+			Size = UDim2.fromOffset(300, 52),
+			Position = UDim2.fromScale(1, 0),
+			AnchorPoint = Vector2.new(1, 0),
+			Parent = bar,
+			OnClick = function()
+				if unlocked then
+					PackOpening.openAll()
+				else
+					Windows.open("Shop")
+				end
+			end,
+		})
+		Components.label({
+			Text = if unlocked
+				then `Opens up to {cap} packs at once, as many as your backpack has room for.`
+				else "Get the Open All pass in the Shop to open every pack with one click.",
+			Size = UDim2.new(1, -320, 0, 24),
+			Position = UDim2.new(0, 4, 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Color = Theme.Colors.Muted,
+			XAlign = Enum.TextXAlignment.Left,
+			StrokeThickness = 1.5,
+			Parent = bar,
+		})
+	end
 	if total == 0 then
 		Components.emptyState(
 			packsList,

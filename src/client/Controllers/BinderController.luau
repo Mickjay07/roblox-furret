@@ -114,7 +114,9 @@ function BinderController:Render()
 		return
 	end
 	for _, collection in Config.Collections.List do
-		bookmark(collection, Collections.progress(data, collection.Id), collection.Id == selected)
+		if not collection.Hidden then
+			bookmark(collection, Collections.progress(data, collection.Id), collection.Id == selected)
+		end
 	end
 
 	local def = Config.Collections.ById[selected]

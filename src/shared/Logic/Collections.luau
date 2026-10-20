@@ -37,15 +37,20 @@ function Collections.all(data: Types.PlayerData): { Progress }
 	return out
 end
 
--- Total discovered / total cards across every collection.
+-- Total discovered / total cards across every visible collection (hidden ones, such as an
+-- unreleased promo set, are left out).
 function Collections.overall(data: Types.PlayerData): (number, number)
-	local found = 0
+	local found, total = 0, 0
 	for _, def in CardRegistry.all() do
-		if data.Discovered[def.Id] ~= nil then
-			found += 1
+		local collection = Config.Collections.ById[def.Collection]
+		if not (collection and collection.Hidden) then
+			total += 1
+			if data.Discovered[def.Id] ~= nil then
+				found += 1
+			end
 		end
 	end
-	return found, CardRegistry.count()
+	return found, total
 end
 
 -- Sum of CompletionIncomeBonus over completed collections.

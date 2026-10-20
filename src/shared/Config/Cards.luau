@@ -540,6 +540,44 @@ local list: { Types.CardDef } = {
 	},
 }
 
+-- Promo Ferrets #100-#110: the artwork is real (Config.Assets card.promo.<n>), but the
+-- PLACEHOLDER name, rarity and income below are NOT the owner's values (none were provided;
+-- the images couldn't be read in the cloud session). Replace them with the values printed
+-- on each card, then remove `Placeholder`. Ids are permanent: keep "promo_<n>".
+local function promo(number: number, rarity: string, income: number): Types.CardDef
+	return {
+		Id = `promo_{number}`,
+		Name = `Promo Ferret #{number}`,
+		Description = "Promo Ferret (placeholder details)",
+		Species = "Sable",
+		Rarity = rarity,
+		BaseIncome = income,
+		BaseSaleValue = income * 2,
+		Artwork = `card.promo.{number}`,
+		Collection = "Promo",
+		CollectionNumber = number,
+		Placeholder = true,
+	}
+end
+
+for _, def in
+	{
+		promo(100, "Common", 50),
+		promo(101, "Common", 50),
+		promo(102, "Common", 50),
+		promo(103, "Uncommon", 80),
+		promo(104, "Uncommon", 80),
+		promo(105, "Rare", 140),
+		promo(106, "Rare", 140),
+		promo(107, "Epic", 480),
+		promo(108, "Legendary", 1500),
+		promo(109, "Mythic", 4000),
+		promo(110, "Secret", 12000),
+	}
+do
+	table.insert(list, def)
+end
+
 return table.freeze({
 	Species = Species,
 	List = list,

@@ -14,6 +14,59 @@ function UiLayout.fitScale(viewport: Vector2, size: Vector2, baseScale: number, 
 	return math.max(0.3, math.min(baseScale, fitX, fitY))
 end
 
+export type HudPlacement = {
+	-- Offset from the top (px) and the anchor/scale-Y used for the stats panel and right rail.
+	StatsY: number,
+	StatsAnchorY: number,
+	RailY: number,
+	RailAnchorY: number,
+	StatsScale: number,
+	RailScale: number,
+}
+
+-- Where the HUD's left stats panel and right icon rail go, for any screen. `scale` is the
+-- normal UI scale, `statsHeight` / `railHeight` / `navHeight` the unscaled heights.
+--   Desktop: both centred vertically, shrunk only if taller than 86% of the screen.
+--   Touch:   both start at the top (under the top buttons in portrait) and must end above
+--            the bottom 38% of the screen, where Roblox puts the thumbstick and jump button.
+function UiLayout.hudPlacement(
+	viewport: Vector2,
+	touch: boolean,
+	scale: number,
+	statsHeight: number,
+	railHeight: number,
+	navHeight: number
+): HudPlacement
+	local function fit(available: number, height: number): number
+		if height <= 0 then
+			return scale
+		end
+		return math.max(0.3, math.min(scale, available / height))
+	end
+	if not touch then
+		local available = viewport.Y * 0.86
+		return {
+			StatsY = 0,
+			StatsAnchorY = 0.5,
+			RailY = 0,
+			RailAnchorY = 0.5,
+			StatsScale = fit(available, statsHeight),
+			RailScale = fit(available, railHeight),
+		}
+	end
+	local portrait = viewport.Y > viewport.X
+	local top = if portrait then 8 + navHeight * scale + 8 else 8
+	local available = viewport.Y * 0.62 - top
+	return {
+		StatsY = top,
+		StatsAnchorY = 0,
+		RailY = top,
+		RailAnchorY = 0,
+		StatsScale = fit(available, statsHeight),
+		RailScale = fit(available, railHeight),
+	}
+end
+
 -- What an upgrade's total effect means at `level`, e.g. "+30% income" or "+2 stands".
 function UiLayout.upgradeEffect(upgradeId: string, level: number): string
 	local def = Config.Upgrades.ById[upgradeId]

@@ -57,6 +57,12 @@ function CardArt.back(): string?
 	return CardArt.image(CardArt.BACK_KEY)
 end
 
+-- The card back for a pack's cards: its own (e.g. the Promo Ferret back) or the shared one.
+function CardArt.backFor(pack: Types.PackDef?): string?
+	local own = if pack and pack.CardBack then CardArt.image(pack.CardBack) else nil
+	return own or CardArt.back()
+end
+
 -- Small copy for little UI tiles: the thumbnail when uploaded, else the full image.
 function CardArt.thumbnail(key: string?): string?
 	local asset = if type(key) == "string" then Config.Assets.Images[key] else nil

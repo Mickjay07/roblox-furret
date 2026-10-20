@@ -321,7 +321,10 @@ function PacksController:Start()
 				Create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingTop = UDim.new(0, 4) }),
 			})
 			for _, pack in Config.Packs.List do
-				buildRow(list, pack)
+				-- Premium (Robux-only) packs live in the Shop, not here.
+				if not pack.ShopHidden then
+					buildRow(list, pack)
+				end
 			end
 			return nil
 		end,
