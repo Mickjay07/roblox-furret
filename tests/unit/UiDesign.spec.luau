@@ -141,10 +141,10 @@ describe("UiLayout: upgrade and price wording", function()
 		expect(UiLayout.upgradeEffect("nope", 1)).toBe("")
 	end)
 
-	it("shows how much money is missing, or nothing when affordable", function()
-		expect(UiLayout.shortfall(500, 1500)).toBe("NEED $1,000")
+	it("explains how much money is missing (a hint, never the price), or nothing when affordable", function()
+		expect(UiLayout.shortfall(500, 1500)).toBe("Need $1,000 more")
 		expect(UiLayout.shortfall(1500, 1500)).toBeNil()
-		expect(UiLayout.shortfall(0, 2500000)).toBe("NEED $2.5M")
+		expect(UiLayout.shortfall(0, 2500000)).toBe("Need $2.5M more")
 	end)
 end)
 

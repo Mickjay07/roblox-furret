@@ -40,9 +40,12 @@ ServerScriptService.Server        (src/server)
     SettingsService               UpdateSetting
     PackService                   BuyPack (to pack inventory), OpenPack (1/3/6 packs, server-side
                                   Random, idempotent per request id via Lib/PackOpenRequests)
-    MonetizationService           Multi Opening game passes: UserOwnsGamePassAsync on join and
-                                  after PromptGamePassPurchaseFinished (Lib/GamePassOwnership),
-                                  PromptMultiOpen (6x needs 3x), GetProductInfo(GamePass)
+    MonetizationService           Game passes (VIP, 2x AFK, Multi Opening): UserOwnsGamePassAsync
+                                  on join and after PromptGamePassPurchaseFinished
+                                  (Lib/GamePassOwnership), PromptGamePass (6x needs 3x).
+                                  Developer Products: PromptProduct, ProcessReceipt
+                                  (Lib/ReceiptProcessor, idempotent, saved before granted).
+                                  GetProductInfo (GamePass / Product), PolicyService check
     CardService                   PlaceCard, RemoveCard, PlaceBest, SellCards, SetFavorite
     UpgradeService                BuyUpgrade
     EconomyService                stand earnings tick, CollectEarnings, offline earnings

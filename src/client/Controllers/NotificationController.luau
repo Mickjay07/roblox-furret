@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
+local Dedupe = require(Shared.Util.Dedupe)
 
 local UI = script.Parent.Parent.UI
 local Components = require(UI.Components)
@@ -21,12 +22,19 @@ local GLYPHS = { info = "i", success = "✓", warning = "!", error = "✕" }
 
 local NotificationController = {}
 
+-- Identical toasts (same text and kind) within this many seconds are shown once.
+local DEDUPE_SECONDS = 3
+local shouldShow = Dedupe.new(DEDUPE_SECONDS, os.clock)
+
 local container: Frame
 
 function NotificationController:Push(message: string, kind: string?)
 	local k = kind or "info"
 	local data = DataController:Get()
 	if data and data.Settings.Notifications == false and k ~= "error" then
+		return
+	end
+	if not shouldShow(`{k}|{message}`) then
 		return
 	end
 	local accent = Theme.NotificationColors[k] or Theme.NotificationColors.info

@@ -115,6 +115,70 @@ function ConfigCheck.run(config: any?): { string }
 		end
 	end
 
+	-- Game passes vs Developer Products: ids are integers, never shared between items, and a
+	-- game pass id is never reused as a product id (they are different Roblox id spaces, but
+	-- a copy-paste mix-up would prompt the wrong API).
+	if Config.Monetization and Config.Monetization.GamePasses then
+		local passIds: { [number]: string } = {}
+		local productIds: { [number]: string } = {}
+		local function passGroup(group: { [string]: any }, label: string)
+			for key, pass in group do
+				if pass.Key ~= key then
+					problem(`{label} {key}: Key must match its table key`)
+				end
+				local id = pass.GamePassId
+				if type(id) ~= "number" or id < 0 or id % 1 ~= 0 then
+					problem(`{label} {key}: GamePassId must be a non-negative integer`)
+				elseif id > 0 then
+					if passIds[id] then
+						problem(`{label} {key}: GamePassId {id} is also used by {passIds[id]}`)
+					end
+					passIds[id] = key
+				end
+			end
+		end
+		passGroup(Config.Monetization.GamePasses, "GamePass")
+		passGroup(Config.Monetization.MultiOpen, "MultiOpen")
+		local function productGroup(group: { [string]: any }, label: string)
+			for key, product in group do
+				if product.Key ~= key then
+					problem(`{label} {key}: Key must match its table key`)
+				end
+				local id = product.ProductId
+				if type(id) ~= "number" or id < 0 or id % 1 ~= 0 then
+					problem(`{label} {key}: ProductId must be a non-negative integer`)
+				elseif id > 0 then
+					if productIds[id] then
+						problem(`{label} {key}: ProductId {id} is also used by {productIds[id]}`)
+					end
+					if passIds[id] then
+						problem(`{label} {key}: ProductId {id} is a game pass id ({passIds[id]})`)
+					end
+					productIds[id] = key
+				end
+				local grants = product.Grants
+				if type(grants) ~= "table" then
+					problem(`{label} {key}: Grants missing`)
+				else
+					for packId, count in grants.Packs or {} do
+						if not Config.Packs.ById[packId] then
+							problem(`{label} {key}: grants unknown pack {packId}`)
+						elseif type(count) ~= "number" or count < 1 or count % 1 ~= 0 then
+							problem(`{label} {key}: pack count must be a positive integer`)
+						end
+					end
+					for currency in grants.Currency or {} do
+						if not Config.Economy.Currencies[currency] then
+							problem(`{label} {key}: grants unknown currency {currency}`)
+						end
+					end
+				end
+			end
+		end
+		productGroup(Config.Monetization.DeveloperProducts, "DeveloperProduct")
+		productGroup(Config.Monetization.LimitedBundles, "LimitedBundle")
+	end
+
 	for _, pack in Config.Packs.List do
 		local where = `pack {pack.Id}`
 		if pack.Price <= 0 or pack.CardsPerOpen < 1 then

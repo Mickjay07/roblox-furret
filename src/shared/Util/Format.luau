@@ -79,4 +79,37 @@ function Format.bonusPercent(value: number, base: number): string?
 	return (if rounded > 0 then "+" else "") .. text .. "%"
 end
 
+-- Prices: like `short`, but rounded UP (never shows less than the real price), so a
+-- truncated balance that looks >= a shown price really is enough. 3 significant digits:
+-- 114734125 -> "115M", 5914783 -> "5.92M", 150000000 -> "150M".
+function Format.price(n: number, commasBelow: number?): string
+	local limit = commasBelow or 1000
+	if n < limit then
+		return Format.commas(math.ceil(n))
+	end
+	local value = n
+	local index = 0
+	while value >= 1000 and index < #SUFFIXES do
+		value /= 1000
+		index += 1
+	end
+	if index == 0 then
+		return Format.commas(math.ceil(n))
+	end
+	local decimals = if value >= 100 then 0 elseif value >= 10 then 1 else 2
+	local factor = 10 ^ decimals
+	-- The epsilon keeps exact values (5.91 * 100 = 590.9999...) from rounding up a step.
+	local rounded = math.ceil(value * factor - 1e-6) / factor
+	if rounded >= 1000 and index < #SUFFIXES then
+		rounded /= 1000
+		index += 1
+		decimals = 2
+	end
+	local text = string.format(`%.{decimals}f`, rounded)
+	if decimals > 0 then
+		text = string.gsub(string.gsub(text, "0+$", ""), "%.$", "")
+	end
+	return text .. SUFFIXES[index]
+end
+
 return Format

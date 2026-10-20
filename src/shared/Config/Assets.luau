@@ -86,6 +86,32 @@ local Images: { [string]: ImageAsset } = {
 	["ui.icon.backpack"] = ui(99636745658331),
 	["ui.icon.upgrades"] = ui(104856714688781),
 	["ui.currency_bar"] = ui(89670723455193),
+	["ui.level_bar"] = ui(129406057306152),
+	["ui.collect_button"] = ui(128905277992791),
+	["ui.icon.shop"] = ui(83544896119835),
+
+	-- Premium Shop item art.
+	["ui.shop.vip"] = ui(108576806919415),
+	["ui.shop.open3"] = ui(137191381736886),
+	["ui.shop.open6"] = ui(120349601099983),
+	["ui.shop.open_all"] = ui(71884954923271),
+
+	-- Promo set (cards #100-#110, its pack front and card back), uploaded directly by the
+	-- owner. The card definitions (name, rarity, income) aren't in the project documentation
+	-- yet, so no card uses these keys until they are added to Config/Cards.
+	["card.promo.100"] = image("", "", 70878561185473),
+	["card.promo.101"] = image("", "", 71690452255214),
+	["card.promo.102"] = image("", "", 123457627384202),
+	["card.promo.103"] = image("", "", 124984047881099),
+	["card.promo.104"] = image("", "", 113879366953871),
+	["card.promo.105"] = image("", "", 132722881927097),
+	["card.promo.106"] = image("", "", 83078173945779),
+	["card.promo.107"] = image("", "", 97300435213696),
+	["card.promo.108"] = image("", "", 118788058418159),
+	["card.promo.109"] = image("", "", 73450075794193),
+	["card.promo.110"] = image("", "", 74079006860743),
+	["pack.promo.front"] = image("", "", 118924487824692),
+	["card.promo.back"] = image("", "", 121661874661575),
 }
 
 return table.freeze({

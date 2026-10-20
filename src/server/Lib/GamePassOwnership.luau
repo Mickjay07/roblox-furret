@@ -1,5 +1,5 @@
 --!strict
--- Multi Opening game pass ownership (pure; unit-tested under Lune with fake queries).
+-- Game pass ownership (Multi Opening, VIP, 2x AFK Time Cash, ...) (pure; unit-tested under Lune with fake queries).
 --
 -- Roblox is the source of truth. `Query` wraps MarketplaceService:UserOwnsGamePassAsync in
 -- pcall and returns (ok, ownedOrError). Results:
@@ -55,7 +55,7 @@ function GamePassOwnership.apply(data: Types.PlayerData, key: string, result: Re
 	return false
 end
 
--- Checks every Multi Opening pass. Returns (results by key, data changed, all verified).
+-- Checks every configured game pass. Returns (results by key, data changed, all verified).
 function GamePassOwnership.refreshAll(
 	data: Types.PlayerData,
 	userId: number,
@@ -65,7 +65,7 @@ function GamePassOwnership.refreshAll(
 ): ({ [string]: Result }, boolean, boolean)
 	local results: { [string]: Result } = {}
 	local changed, verified = false, true
-	for _, product in Entitlements.products() do
+	for _, product in Entitlements.passes() do
 		if product.GamePassId > 0 then
 			local result = GamePassOwnership.check(query, userId, product.GamePassId, attempts, pause)
 			results[product.Key] = result
@@ -97,7 +97,10 @@ function GamePassOwnership.purchaseMessage(
 		return "warning",
 			`{product.DisplayName} pass owned! It activates once you also own {name} - you keep the pass, no need to buy it again.`
 	end
-	return "success", `{product.DisplayName} activated! You can now open {product.Packs} packs at once.`
+	if product.Packs then
+		return "success", `{product.DisplayName} activated! You can now open {product.Packs} packs at once.`
+	end
+	return "success", `{product.DisplayName} activated! Thank you for your support.`
 end
 
 -- Checks GetProductInfo(id, Enum.InfoType.GamePass) output against the config.

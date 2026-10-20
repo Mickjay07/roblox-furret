@@ -1,8 +1,11 @@
 --!strict
 -- Upgrades window: one card per upgrade in Config.Upgrades (the upgrades the server actually
 -- implements), with its level, what it does now and at the next level, and a buy button in
--- one of three states: affordable, unaffordable ("NEED $X") or maxed. Purchases go through
--- the validated BuyUpgrade remote; the UI only updates from replicated data.
+-- one of three states: affordable (green), unaffordable (grey) or MAXED. The button always
+-- shows the FULL price of the next level; how much is missing is a separate hint below it.
+-- Purchases go through the validated BuyUpgrade remote (the server re-checks the price and
+-- balance); the UI only updates from replicated data. An unaffordable click is answered
+-- locally with one toast instead of a request the server would reject.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -21,6 +24,7 @@ local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local Request = require(script.Parent.Parent.Lib.Request)
+local NotificationController = require(script.Parent.NotificationController)
 local DataController = require(script.Parent.DataController)
 
 local UpgradesController = {}
@@ -90,34 +94,49 @@ local function buildRow(list: Instance, def: Types.UpgradeDef)
 	bar.Position = UDim2.new(1, -230, 0, 52)
 	bar.AnchorPoint = Vector2.new(1, 0)
 	bar.Parent = row
+	local state: UiLayout.UpgradeButton? = nil
 	local buy = Components.button({
 		Text = "",
 		Style = "Green",
-		Size = UDim2.fromOffset(196, 58),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(196, 52),
+		Position = UDim2.new(1, -14, 0, 14),
+		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
+			local current = state
+			if not current or current.Maxed then
+				return
+			end
+			if not current.Affordable then
+				NotificationController:Push(`Not enough {def.Currency}. {current.Hint or ""}`, "error")
+				return
+			end
 			Request(Remotes.Functions.BuyUpgrade, def.Id)
 		end,
+	})
+	local hint = Components.label({
+		Text = "",
+		Size = UDim2.fromOffset(196, 20),
+		Position = UDim2.new(1, -14, 0, 72),
+		AnchorPoint = Vector2.new(1, 0),
+		Color = Theme.Colors.Muted,
+		StrokeThickness = 1.5,
+		Parent = row,
 	})
 	local function refresh(data: Types.PlayerData)
 		local current = Economy.upgradeLevel(data, def.Id)
 		levelLabel.Text = `LV {current} / {def.MaxLevel}`
 		setProgress(current / def.MaxLevel)
-		local cost = Economy.upgradeCost(def, current)
+		local balance = data.Currency[def.Currency] or 0
+		local button = UiLayout.upgradeButton(def, current, balance)
+		state = button
 		local now = if current > 0 then UiLayout.upgradeEffect(def.Id, current) else "nothing yet"
-		if cost then
-			effect.Text = `NOW: {now}  →  NEXT: {UiLayout.upgradeEffect(def.Id, current + 1)}`
-			local balance = data.Currency[def.Currency] or 0
-			local need = UiLayout.shortfall(balance, cost)
-			Components.setButtonText(buy, need or ("$" .. Format.short(cost, 1e6)))
-			Components.setButtonStyle(buy, if need then "Gray" else "Green")
-		else
-			effect.Text = `MAXED: {now}`
-			Components.setButtonText(buy, "MAXED")
-			Components.setButtonStyle(buy, "Gold")
-		end
+		effect.Text = if button.Maxed
+			then `MAXED: {now}`
+			else `NOW: {now}  →  NEXT: {UiLayout.upgradeEffect(def.Id, current + 1)}`
+		Components.setButtonText(buy, button.Text)
+		Components.setButtonStyle(buy, button.Style)
+		hint.Text = if button.Maxed then "Max level reached" else (button.Hint or "")
 	end
 	DataController:Observe("Upgrades", refresh)
 	DataController:Observe("Currency", refresh)

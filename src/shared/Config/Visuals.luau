@@ -103,6 +103,26 @@ return table.freeze({
 			-- before it; -0.12 keeps a hair of margin.
 			FallbackOffsetX = -0.12,
 		}),
+		-- Level bar art (ui.level_bar): the progress fill is a separate Frame drawn inside
+		-- the art at these insets (fractions of the art box), so it can grow with XP.
+		-- Starting values: check in Studio and adjust here if the fill doesn't sit inside the
+		-- bar's empty track (docs/TESTING.md).
+		LevelBar = table.freeze({
+			Width = 260,
+			Aspect = 5, -- art width / height
+			FillInsetLeft = 0.08,
+			FillInsetRight = 0.06,
+			FillInsetTop = 0.32,
+			FillInsetBottom = 0.32,
+			-- false: the fill is drawn behind the art (for art with a transparent track).
+			FillAboveArt = true,
+		}),
+		-- Collect button art (ui.collect_button): the amount is a separate label beside it.
+		CollectButton = table.freeze({
+			ArtWidth = 132,
+			Height = 60,
+			LabelWidth = 190,
+		}),
 		-- Gap between the left screen edge (inside the device safe area) and the stats panel.
 		LeftMargin = 10,
 		-- Right rail icons (ui.icon.*): square hit areas; the art is drawn with ScaleType.Fit

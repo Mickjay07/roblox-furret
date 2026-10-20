@@ -3,6 +3,63 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-20: Upgrade prices, Premium Shop, Robux packs and the pack inventory
+
+- **Upgrade affordability bug (root cause):** the maths was right; the label was wrong.
+  - Cosy Hammocks level 21 costs floor(500 × 1.8²¹) = $114,734,125. With $108,819,342 the
+    button showed the shortfall (`NEED $5.91M`) where the price belongs, so it looked like a
+    $5.91M upgrade the player "could afford".
+  - Every grey click also sent `BuyUpgrade`, and each server rejection toasted again.
+- **Upgrade fix:**
+  - `UiLayout.upgradeButton` (pure, tested) gives the button state: the full price
+    (`Format.price`, rounded up so it never understates) or `MAXED`.
+  - Affordability is `balance >= price`, the same rule as `Wallet.spend`.
+  - `Need $X more` is a separate hint under the button.
+  - Unaffordable clicks are answered locally with one toast and send no request.
+  - `Util/Dedupe` merges identical toasts within 3 s.
+  - Server validation (`UpgradeShop.buy`) was already correct and is unchanged; new tests
+    cover it.
+  - The Pack Shop BUY button got the same treatment.
+- **Game passes:**
+  - VIP 2040244736 adds +25% income, in `Economy.incomeMultiplier`, so the HUD shows the
+    real rate.
+  - 2x AFK Time Cash 2038205144 doubles the offline earnings credited at join, exactly once.
+    EconomyService now waits for the pass check (max 10 s) before crediting, and the tick
+    loop no longer moves `LastOnline` until then.
+  - `PromptMultiOpen` is renamed `PromptGamePass` and covers every pass.
+  - Open All has no game pass id → `COMING SOON`.
+- **Developer Products:**
+  - Packs: 1 / 3 / 10 = 3720277269 / 3720277334 / 3720277406 (expected 75 / 199 / 499 R$).
+  - They are granted only in `ProcessReceipt` (`Lib/ReceiptProcessor`). Each `PurchaseId`
+    is recorded and saved before `PurchaseGranted`.
+  - A failed save rolls back and returns `NotProcessedYet`.
+  - Duplicates are not granted twice; unknown products and players who aren't loaded get
+    `NotProcessedYet`.
+  - Packs go into `data.Packs`, the same inventory as cash packs.
+- **Paid random items:**
+  - Robux packs show per-rarity odds.
+  - They are hidden and refused when `PolicyService` reports `ArePaidRandomItemsRestricted`,
+    or when the policy query fails.
+- **UI:**
+  - New Premium Shop window (`Shop`, icon 83544896119835), with passes, Robux packs and a
+    data-driven limited-time section (empty).
+  - The HUD rail gets a SHOP icon.
+  - Backpack gains a PACKS tab: owned packs, 1/3/6 mode buttons and OPEN. Packs are opened
+    from here.
+  - The Pack Shop rows show `IN BAG (n)`.
+  - HUD level bar art 129406057306152 has a dynamic fill (`Hud.LevelBar` insets), and the
+    collect art 128905277992791 shows the amount beside it.
+- **Assets registered:**
+  - Shop art: 108576806919415, 137191381736886, 120349601099983, 71884954923271.
+  - Promo cards #100–#110, promo pack wrapper 118924487824692 and promo card back
+    121661874661575.
+  - The promo cards have no definitions: the docs don't specify names, rarities, incomes or
+    the promo mechanics.
+- **Verification:**
+  - `./scripts/check.sh` passed in the cloud session (stylua, selene offline, rojo,
+    luau-lsp, 317 Lune tests).
+  - Nothing has run in Roblox Studio; checklists are in docs/TESTING.md §1.19–1.22.
+
 ## 2026-10-20: Studio feedback fixes: Binder counts, HUD image fallbacks, stands and cash counter
 
 Based on the owner's Studio screenshot (HUD and plot) and report.

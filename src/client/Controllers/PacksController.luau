@@ -1,8 +1,9 @@
 --!strict
--- Pack shop window. OPEN opens one pack and plays the A7 opening sequence (UI/PackReveal).
+-- Pack shop window: buy packs with Cash. Bought packs go straight into the pack inventory
+-- (Backpack > PACKS), where they are opened (Lib/PackOpening plays the A7 reveal). The BUY
+-- button always shows the full price; the server validates the price and balance and
+-- deducts once (BuyPack -> PackShop.buy). Robux packs are sold in the Premium Shop.
 
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -12,71 +13,30 @@ local Types = require(Shared.Types)
 local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
-local Entitlements = require(Shared.Logic.Entitlements)
 local PackRoller = require(Shared.Logic.PackRoller)
 local Progression = require(Shared.Logic.Progression)
 local UiLayout = require(Shared.Logic.UiLayout)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
-local PackReveal = require(UI.PackReveal)
 local Components = require(UI.Components)
 local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local ArtDiagnostics = require(script.Parent.Parent.Lib.ArtDiagnostics)
 local Request = require(script.Parent.Parent.Lib.Request)
+local BackpackController = require(script.Parent.BackpackController)
 local DataController = require(script.Parent.DataController)
 local NotificationController = require(script.Parent.NotificationController)
 
 local PacksController = {}
 
--- One pack opening at a time: set from the OPEN click until the reveal is closed.
-local opening = false
-
--- Opens `packs` owned packs together (1, or 3 / 6 with Multi Opening). The server checks the
--- unlock and the pack count, consumes the packs and grants the cards before replying; the
--- request id makes a repeated request (double click, retry) return the same result
--- instead of opening more packs. The reveal is purely visual.
-local function openPack(pack: Types.PackDef, packs: number)
-	if opening or PackReveal.isOpen() then
-		return
-	end
-	local data = DataController:Get()
-	if not data or (data.Packs[pack.Id] or 0) < packs or not Entitlements.canUseMode(data, packs) then
-		return
-	end
-	opening = true
-	local requestId = HttpService:GenerateGUID(false)
-	local result = Request(Remotes.Functions.OpenPack, pack.Id, requestId, packs)
-	if not result.ok or type(result.cards) ~= "table" then
-		opening = false
-		return
-	end
-	PackReveal.play(pack, result.cards, result.packs, result.cardsPerPack, function()
-		opening = false
-	end)
-end
-
--- Robux price published by the server after reading the game pass info (nil until then,
--- or when the pass is not for sale / could not be read).
-local function productState(key: string): (boolean, number?)
-	local folder = ReplicatedStorage:FindFirstChild("ProductInfo")
-	if not folder then
-		return false, nil
-	end
-	local price = folder:GetAttribute(`{key}_Price`)
-	return folder:GetAttribute(`{key}_Available`) == true, if type(price) == "number" then price else nil
-end
-
 -- One shop row per pack.
 local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amount = 1
-	-- Opening size for this row: 1, 3 or 6 packs at once.
-	local mode = 1
 	local row = Components.panel({
 		Name = pack.Id,
-		Size = UDim2.new(1, -12, 0, 206),
+		Size = UDim2.new(1, -12, 0, 176),
 		LayoutOrder = pack.Order,
 		Parent = list,
 	})
@@ -85,7 +45,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	Create("Frame", {
 		Name = "Glow",
 		Size = UDim2.fromOffset(112, 160),
-		Position = UDim2.fromOffset(12, 10),
+		Position = UDim2.fromOffset(12, 8),
 		BackgroundColor3 = Theme.Colors.Gold,
 		BackgroundTransparency = 0.82,
 		Active = false,
@@ -96,7 +56,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		Create("ImageLabel", {
 			Name = "PackArt",
 			Size = UDim2.fromOffset(100, 150),
-			Position = UDim2.fromOffset(18, 15),
+			Position = UDim2.fromOffset(18, 13),
 			BackgroundTransparency = 1,
 			Image = packArt,
 			ScaleType = Enum.ScaleType.Fit,
@@ -106,7 +66,7 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	else
 		ArtDiagnostics.fallback("Pack Shop", pack.Artwork)
 		local icon = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(100, 150))
-		icon.Position = UDim2.fromOffset(18, 15)
+		icon.Position = UDim2.fromOffset(18, 13)
 		icon.Parent = row
 	end
 
@@ -141,18 +101,15 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 	local amountLabel = Components.label({
 		Text = "x1",
 		Size = UDim2.fromOffset(60, 34),
-		Position = UDim2.new(1, -306, 0, 82),
+		Position = UDim2.new(1, -306, 0, 42),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 	})
-	local buy: TextButton
-	local onAmountChanged: () -> () = function() end
-	local function refreshPrice()
-		amountLabel.Text = `x{amount}`
-		Components.setButtonText(buy, "BUY $" .. Format.short(pack.Price * amount, 1e6))
-		onAmountChanged()
+	local refreshRow: () -> () = function() end
+	local function price(): number
+		return pack.Price * amount
 	end
-	buy = Components.button({
+	local buy = Components.button({
 		Text = "",
 		Style = "Green",
 		Size = UDim2.fromOffset(210, 56),
@@ -160,94 +117,85 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
-			local result = Request(Remotes.Functions.BuyPack, pack.Id, amount)
+			local data = DataController:Get()
+			if not data then
+				return
+			end
+			local missing = Progression.describeMissing(data, pack.Unlock)
+			if missing then
+				NotificationController:Push(missing, "error")
+				return
+			end
+			local need = UiLayout.shortfall(data.Currency[pack.Currency] or 0, price())
+			if need then
+				-- Answered locally (one toast): the server would reject it anyway.
+				NotificationController:Push(`Not enough {pack.Currency}. {need}`, "error")
+				return
+			end
+			local bought = amount
+			local result = Request(Remotes.Functions.BuyPack, pack.Id, bought)
 			if result.ok then
 				NotificationController:Push(
-					`Bought {amount}x {pack.DisplayName} - you have {result.owned}. Open them any time!`,
+					`{bought}x {pack.DisplayName} added to your bag ({result.owned} owned). Open them from Backpack > Packs!`,
 					"success"
 				)
 			end
 		end,
 	})
-	local open = Components.button({
-		Text = "NO PACKS",
-		Style = "Gray",
+	local hint = Components.label({
+		Text = "",
+		Size = UDim2.fromOffset(210, 20),
+		Position = UDim2.new(1, -14, 0, 74),
+		AnchorPoint = Vector2.new(1, 0),
+		Color = Theme.Colors.Muted,
+		StrokeThickness = 1.5,
+		Parent = row,
+	})
+	local bag = Components.button({
+		Text = "IN BAG (0)",
+		Style = "Brown",
 		Size = UDim2.fromOffset(210, 46),
-		Position = UDim2.new(1, -14, 0, 80),
+		Position = UDim2.new(1, -14, 0, 104),
 		AnchorPoint = Vector2.new(1, 0),
 		Parent = row,
 		OnClick = function()
-			openPack(pack, mode)
+			BackpackController:OpenPacks()
 		end,
 	})
-
-	-- Opening mode strip: 1 pack always; 3x / 6x with the Multi Opening game passes.
-	Components.label({
-		Text = "OPEN:",
-		Size = UDim2.fromOffset(70, 28),
-		Position = UDim2.fromOffset(136, 158),
-		XAlign = Enum.TextXAlignment.Left,
-		Color = Theme.Colors.Gold,
+	Components.button({
+		Text = "GET PACKS WITH ROBUX",
+		Style = "Purple",
+		Size = UDim2.fromOffset(270, 38),
+		Position = UDim2.fromOffset(136, 118),
 		Parent = row,
+		OnClick = function()
+			Windows.open("Shop")
+		end,
 	})
-	local refreshModes: () -> () = function() end
-	local modeButtons: { { packs: number, product: Entitlements.Product?, button: TextButton } } = {}
-	local modeOptions: { { packs: number, product: Entitlements.Product? } } = { { packs = 1, product = nil } }
-	for _, product in Entitlements.products() do
-		table.insert(modeOptions, { packs = product.Packs, product = product })
-	end
-	for i, option in modeOptions do
-		local button = Components.button({
-			Text = "",
-			Style = "Blue",
-			Size = UDim2.fromOffset(196, 38),
-			Position = UDim2.fromOffset(210 + (i - 1) * 204, 154),
-			Parent = row,
-			OnClick = function()
-				local data = DataController:Get()
-				if not data then
-					return
-				end
-				if Entitlements.canUseMode(data, option.packs) then
-					mode = option.packs
-					refreshModes()
-					return
-				end
-				local product = option.product
-				if product and Entitlements.canPurchase(data, product.Key) then
-					-- The server re-checks the prerequisite and prompts the game pass. Ownership
-					-- is recorded only after the server confirms it with Roblox.
-					Request(Remotes.Functions.PromptMultiOpen, product.Key)
-				end
-			end,
-		})
-		table.insert(modeButtons, { packs = option.packs, product = option.product, button = button })
-	end
 	Components.button({
 		Text = "-",
 		Style = "Brown",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -350, 0, 82),
+		Position = UDim2.new(1, -350, 0, 42),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
 			amount = math.max(1, amount - 1)
-			refreshPrice()
+			refreshRow()
 		end,
 	})
 	Components.button({
 		Text = "+",
 		Style = "Brown",
 		Size = UDim2.fromOffset(44, 40),
-		Position = UDim2.new(1, -262, 0, 82),
+		Position = UDim2.new(1, -262, 0, 42),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Parent = row,
 		OnClick = function()
 			amount = math.min(Config.Game.Limits.MaxPacksPerPurchase, amount + 1)
-			refreshPrice()
+			refreshRow()
 		end,
 	})
-	refreshPrice()
 
 	local lock = Create("Frame", {
 		Name = "Lock",
@@ -311,80 +259,27 @@ local function buildRow(list: ScrollingFrame, pack: Types.PackDef)
 
 		local missing = Progression.describeMissing(data, pack.Unlock)
 		local owned = data.Packs[pack.Id] or 0
-		-- Owned packs stay openable even if the pack can no longer be bought.
+		-- Owned packs stay openable (from the bag) even if the pack can no longer be bought.
 		lock.Visible = missing ~= nil and owned == 0
-		if not Entitlements.canUseMode(data, mode) then
-			mode = 1
-		end
-		Components.setButtonText(
-			open,
-			if owned >= mode
-				then (if mode > 1 then `OPEN {mode}x ({owned})` else `OPEN ({owned})`)
-				elseif owned > 0 then `NEED {mode} PACKS`
-				else "NO PACKS"
-		)
-		Components.setButtonStyle(open, if owned >= mode then "Gold" else "Gray")
-		for _, entry in modeButtons do
-			local label, style
-			if Entitlements.canUseMode(data, entry.packs) then
-				label = if entry.packs == 1 then "1 PACK" else `{entry.packs} PACKS`
-				style = if entry.packs == mode then "Gold" else "Brown"
-			elseif entry.product then
-				local product = entry.product :: Entitlements.Product
-				local available, price = productState(product.Key)
-				local canBuy, _ = Entitlements.canPurchase(data, product.Key)
-				local verified = Players.LocalPlayer:GetAttribute("GamePassesVerified") == true
-				if product.Requires and not Entitlements.owns(data, product.Requires) then
-					local required = Entitlements.product(product.Requires)
-					label, style = `{entry.packs}x - NEEDS {if required then `{required.Packs}x` else "UNLOCK"}`, "Gray"
-				elseif Entitlements.owns(data, product.Key) then
-					label, style = `{entry.packs}x - LOCKED`, "Gray"
-				elseif not verified then
-					-- Ownership not confirmed by Roblox yet: never show "unlock" as if not owned.
-					label, style = `{entry.packs}x - CHECKING...`, "Gray"
-				elseif canBuy and available then
-					label, style =
-						if price then `UNLOCK {entry.packs}x  R${price}` else `UNLOCK {entry.packs}x`, "Purple"
-				else
-					label, style = `{entry.packs}x - UNAVAILABLE`, "Gray"
-				end
-			end
-			Components.setButtonText(entry.button, label or "")
-			Components.setButtonStyle(entry.button, style or "Gray")
-		end
-		-- Insufficient funds: say how much is missing instead of a dead BUY button.
-		local need = UiLayout.shortfall(data.Currency[pack.Currency] or 0, pack.Price * amount)
-		Components.setButtonText(buy, need or ("BUY $" .. Format.short(pack.Price * amount, 1e6)))
+		Components.setButtonText(bag, `IN BAG ({owned})`)
+		Components.setButtonStyle(bag, if owned > 0 then "Gold" else "Brown")
+		-- The button always shows the full price; what is missing is a separate hint.
+		amountLabel.Text = `x{amount}`
+		local need = UiLayout.shortfall(data.Currency[pack.Currency] or 0, price())
+		Components.setButtonText(buy, "BUY " .. UiLayout.priceText(price()))
 		Components.setButtonStyle(buy, if need == nil and missing == nil then "Green" else "Gray")
+		hint.Text = need or ""
 		lockText.Text = if missing then string.upper(missing) else ""
 	end
-	DataController:Observe("Progression", refresh)
-	DataController:Observe("Packs", refresh)
-	DataController:Observe("Purchases", refresh)
-	refreshModes = function()
+	refreshRow = function()
 		local data = DataController:Get()
 		if data then
 			refresh(data)
 		end
 	end
-	task.spawn(function()
-		-- Prices and availability appear once the server has verified the products.
-		Players.LocalPlayer:GetAttributeChangedSignal("GamePassesVerified"):Connect(refreshModes)
-		local folder = ReplicatedStorage:WaitForChild("ProductInfo", 30)
-		if folder then
-			folder.AttributeChanged:Connect(refreshModes)
-			refreshModes()
-		end
-	end)
-	onAmountChanged = function()
-		local data = DataController:Get()
-		if data then
-			refresh(data)
-		end
+	for _, key in { "Progression", "Packs", "Currency", "Discovered", "Upgrades" } do
+		DataController:Observe(key, refresh)
 	end
-	DataController:Observe("Currency", refresh)
-	DataController:Observe("Discovered", refresh)
-	DataController:Observe("Upgrades", refresh)
 end
 
 function PacksController:Start()

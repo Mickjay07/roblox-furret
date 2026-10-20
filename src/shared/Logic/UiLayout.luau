@@ -36,11 +36,47 @@ function UiLayout.upgradeEffect(upgradeId: string, level: number): string
 end
 
 -- Label for a price the player can't afford yet, e.g. "NEED $1.2K".
+-- Hint for an unaffordable price ("Need $1,000 more"), or nil when affordable. This is
+-- never the price itself: buttons always show the full price (UiLayout.upgradeButton).
 function UiLayout.shortfall(balance: number, price: number): string?
 	if balance >= price then
 		return nil
 	end
-	return `NEED ${Format.short(price - balance, 1e6)}`
+	return `Need ${Format.price(price - balance, 1e6)} more`
+end
+
+-- Full price label for a buy button, e.g. "$150M" or "$1,500".
+function UiLayout.priceText(price: number): string
+	return "$" .. Format.price(price, 1e6)
+end
+
+export type UpgradeButton = {
+	Text: string,
+	-- Button style: "Green" affordable, "Gray" unaffordable, "Gold" maxed.
+	Style: string,
+	-- Separate explanation under the button ("Need $X more"), or nil.
+	Hint: string?,
+	Price: number?,
+	Affordable: boolean,
+	Maxed: boolean,
+}
+
+-- State of an upgrade's buy button. The text is always the full price of the next level
+-- (or MAXED); affordability is exactly `balance >= price`, the same rule the server uses.
+function UiLayout.upgradeButton(def: any, level: number, balance: number): UpgradeButton
+	if level >= def.MaxLevel then
+		return { Text = "MAXED", Style = "Gold", Hint = nil, Price = nil, Affordable = false, Maxed = true }
+	end
+	local price = math.floor(def.BaseCost * def.CostGrowth ^ level)
+	local affordable = balance >= price
+	return {
+		Text = UiLayout.priceText(price),
+		Style = if affordable then "Green" else "Gray",
+		Hint = UiLayout.shortfall(balance, price),
+		Price = price,
+		Affordable = affordable,
+		Maxed = false,
+	}
 end
 
 return UiLayout

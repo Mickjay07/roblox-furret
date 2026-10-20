@@ -195,12 +195,14 @@ COMMANDS.offline = {
 			return false, "seconds must be 1 to 2592000"
 		end
 		ctx.data.Income.LastOnline = math.max(1, ctx.now - seconds)
-		local added, counted = IncomeLedger.applyOffline(ctx.data, ctx.now)
+		-- Same rule as a real join: 2x AFK Time Cash doubles these earnings once.
+		local multiplier = Economy.offlineMultiplier(ctx.data)
+		local added, counted = IncomeLedger.applyOffline(ctx.data, ctx.now, 1, multiplier)
 		IncomeLedger.markOnline(ctx.data, ctx.now)
 		return true,
 			`offline {Format.duration(seconds)}: counted {Format.duration(counted)} (cap {Format.duration(
 				Config.Economy.Income.OfflineCapSeconds
-			)}), stands earned {Format.commas(added)}`,
+			)}), stands earned {Format.commas(added)}{if multiplier > 1 then ` (x{multiplier} AFK pass)` else ""}`,
 			{ "Income" }
 	end,
 }

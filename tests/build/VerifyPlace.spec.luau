@@ -75,6 +75,14 @@ describe("built place", function()
 		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "ImageBounds" }, class = "ModuleScript" },
 		{ path = { "ReplicatedStorage", "Shared", "Logic", "Entitlements" }, class = "ModuleScript" },
 		{ path = { "ServerScriptService", "Server", "Lib", "GamePassOwnership" }, class = "ModuleScript" },
+		{ path = { "ServerScriptService", "Server", "Lib", "ReceiptProcessor" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Logic", "Products" }, class = "ModuleScript" },
+		{ path = { "ReplicatedStorage", "Shared", "Util", "Dedupe" }, class = "ModuleScript" },
+		{ path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Lib", "PackOpening" }, class = "ModuleScript" },
+		{
+			path = { "StarterPlayer", "StarterPlayerScripts", "Client", "Controllers", "PremiumShopController" },
+			class = "ModuleScript",
+		},
 		{
 			path = { "ServerScriptService", "Server", "Services", "MonetizationService" },
 			class = "ModuleScript",

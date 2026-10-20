@@ -16,9 +16,12 @@ local Remotes = {
 		-- Multi Opening unlocks) -> { packs, cardsPerPack, cards = { RevealCard },
 		-- levelsGained, treatsGained }. Repeating a requestId returns the same result.
 		OpenPack = "OpenPack",
-		-- (passKey) asks the server to prompt a Multi Opening game pass; the server checks the
-		-- prerequisite first. Ownership is only ever set from UserOwnsGamePassAsync.
-		PromptMultiOpen = "PromptMultiOpen",
+		-- (passKey) asks the server to prompt a game pass (VIP, 2x AFK, Multi Opening...); the
+		-- server checks prerequisites first. Ownership is only ever set from UserOwnsGamePassAsync.
+		PromptGamePass = "PromptGamePass",
+		-- (productKey) asks the server to prompt a Developer Product. Nothing is granted here:
+		-- products are granted only in ProcessReceipt, after Roblox charged the player.
+		PromptProduct = "PromptProduct",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",
 		-- () moves your character to your own plot

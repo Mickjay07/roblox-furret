@@ -38,6 +38,7 @@ local TOP_NAV = {
 -- `icon` is a Config.Assets key for the custom HUD art; without an uploaded image the entry
 -- falls back to a text button.
 local RIGHT_NAV = {
+	{ window = "Shop", text = "SHOP", style = "Gold", icon = "ui.icon.shop" },
 	{ window = "Backpack", text = "BAG", style = "Orange", icon = "ui.icon.backpack" },
 	{ window = "Binder", text = "BINDER", style = "Purple", icon = "ui.icon.binder" },
 	{ window = "Upgrades", text = "UPGRADES", style = "Green", icon = "ui.icon.upgrades" },
@@ -222,44 +223,149 @@ local function buildStats(gui: ScreenGui)
 		Parent = treatsRow,
 	})
 
-	local levelRow = row(4, 40)
-	local levelPlate = Create("Frame", {
-		Size = UDim2.fromOffset(200, 40),
-		BackgroundColor3 = Theme.Colors.Panel,
-		Parent = levelRow,
-	}, { Components.corner(UDim.new(0, 12)), Components.stroke(Theme.Colors.Gold, 2.5) })
-	local levelText = Components.label({
-		Text = "LV 1",
-		Size = UDim2.new(1, -16, 0, 20),
-		Position = UDim2.fromOffset(8, 2),
-		Parent = levelPlate,
-	})
-	local bar, setProgress = Components.progressBar(Theme.Colors.Level, UDim2.new(1, -16, 0, 10))
-	bar.Position = UDim2.new(0, 8, 1, -14)
-	bar.Parent = levelPlate
+	-- Level: the bar art (ui.level_bar) with a dynamic fill inside it, or a drawn plate.
+	local levelArt = CardArt.image("ui.level_bar")
+	local levelLayout = Config.Visuals.Hud.LevelBar
+	local levelText: TextLabel
+	local setProgress: (number) -> ()
+	if levelArt then
+		ArtDiagnostics.watch("HUD", "ui.level_bar", levelArt)
+		local height = math.floor(levelLayout.Width / levelLayout.Aspect)
+		local levelRow = row(4, height)
+		local holder = Create("Frame", {
+			Name = "LevelBar",
+			Size = UDim2.fromOffset(levelLayout.Width, height),
+			BackgroundTransparency = 1,
+			Parent = levelRow,
+		})
+		Create("ImageLabel", {
+			Name = "Art",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Image = levelArt,
+			ScaleType = Enum.ScaleType.Stretch,
+			ZIndex = 2,
+			Parent = holder,
+		})
+		local track = Create("Frame", {
+			Name = "Track",
+			Size = UDim2.fromScale(
+				1 - levelLayout.FillInsetLeft - levelLayout.FillInsetRight,
+				1 - levelLayout.FillInsetTop - levelLayout.FillInsetBottom
+			),
+			Position = UDim2.fromScale(levelLayout.FillInsetLeft, levelLayout.FillInsetTop),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = if levelLayout.FillAboveArt then 3 else 1,
+			Parent = holder,
+		})
+		local fill = Create("Frame", {
+			Name = "Fill",
+			Size = UDim2.fromScale(0, 1),
+			BackgroundColor3 = Theme.Colors.Level,
+			ZIndex = track.ZIndex,
+			Parent = track,
+		}, { Components.corner(UDim.new(1, 0)) })
+		levelText = Components.label({
+			Text = "LV 1",
+			Size = UDim2.fromScale(0.9, 0.7),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Parent = holder,
+		})
+		levelText.ZIndex = 4
+		setProgress = function(fraction: number)
+			fill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
+		end
+	else
+		local levelRow = row(4, 40)
+		local levelPlate = Create("Frame", {
+			Size = UDim2.fromOffset(200, 40),
+			BackgroundColor3 = Theme.Colors.Panel,
+			Parent = levelRow,
+		}, { Components.corner(UDim.new(0, 12)), Components.stroke(Theme.Colors.Gold, 2.5) })
+		levelText = Components.label({
+			Text = "LV 1",
+			Size = UDim2.new(1, -16, 0, 20),
+			Position = UDim2.fromOffset(8, 2),
+			Parent = levelPlate,
+		})
+		local bar
+		bar, setProgress = Components.progressBar(Theme.Colors.Level, UDim2.new(1, -16, 0, 10))
+		bar.Position = UDim2.new(0, 8, 1, -14)
+		bar.Parent = levelPlate
+	end
 
-	-- Central collection of every stand's earnings (owner decision Q3).
-	local collect = Components.button({
-		Name = "CollectAll",
-		Text = "NOTHING TO COLLECT",
-		Style = "Gray",
-		Size = UDim2.fromOffset(260, 52),
-		LayoutOrder = 5,
-		Parent = panel,
-		OnClick = function()
-			local result = Request(Remotes.Functions.CollectEarnings, 0)
-			if result.ok and (result.collected or 0) > 0 then
-				NotificationController:Push(`Collected ${Format.short(result.collected, 1e6)}`, "success")
-			end
-		end,
-	})
-	local function refreshPending(data: Types.PlayerData)
-		local pending = math.floor(IncomeLedger.pendingTotal(data))
-		Components.setButtonText(
-			collect,
-			if pending > 0 then `COLLECT ${Format.short(pending)}` else "NOTHING TO COLLECT"
-		)
-		Components.setButtonStyle(collect, if pending > 0 then "Gold" else "Gray")
+	-- Central collection of every stand's earnings (owner decision Q3): the collect art
+	-- (ui.collect_button) with the amount in a label beside it, or a drawn button.
+	local function collectAll()
+		local result = Request(Remotes.Functions.CollectEarnings, 0)
+		if result.ok and (result.collected or 0) > 0 then
+			NotificationController:Push(`Collected ${Format.short(result.collected, 1e6)}`, "success")
+		end
+	end
+	local collectArt = CardArt.image("ui.collect_button")
+	local refreshPending: (Types.PlayerData) -> ()
+	if collectArt then
+		ArtDiagnostics.watch("HUD", "ui.collect_button", collectArt)
+		local layout = Config.Visuals.Hud.CollectButton
+		local scale = Create("UIScale", { Scale = 1 })
+		local button: TextButton = Create("TextButton", {
+			Name = "CollectAll",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(layout.ArtWidth + 8 + layout.LabelWidth, layout.Height),
+			LayoutOrder = 5,
+			Parent = panel,
+		}, { scale })
+		local art = Create("ImageLabel", {
+			Name = "Art",
+			Size = UDim2.fromOffset(layout.ArtWidth, layout.Height),
+			BackgroundTransparency = 1,
+			Image = collectArt,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = button,
+		})
+		local amount = Components.label({
+			Name = "Amount",
+			Text = "",
+			Size = UDim2.fromOffset(layout.LabelWidth, layout.Height - 12),
+			Position = UDim2.new(0, layout.ArtWidth + 8, 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Color = Theme.Colors.Cash,
+			XAlign = Enum.TextXAlignment.Left,
+			Parent = button,
+		})
+		button.Activated:Connect(function()
+			scale.Scale = 0.94
+			Components.tween(scale, 0.12, { Scale = 1 }, Enum.EasingStyle.Back)
+			collectAll()
+		end)
+		refreshPending = function(data: Types.PlayerData)
+			local pending = math.floor(IncomeLedger.pendingTotal(data))
+			amount.Text = if pending > 0 then `${Format.short(pending, 1e6)}` else "NOTHING YET"
+			amount.TextColor3 = if pending > 0 then Theme.Colors.Cash else Theme.Colors.Muted
+			art.ImageTransparency = if pending > 0 then 0 else 0.35
+		end
+	else
+		local collect = Components.button({
+			Name = "CollectAll",
+			Text = "NOTHING TO COLLECT",
+			Style = "Gray",
+			Size = UDim2.fromOffset(260, 52),
+			LayoutOrder = 5,
+			Parent = panel,
+			OnClick = collectAll,
+		})
+		refreshPending = function(data: Types.PlayerData)
+			local pending = math.floor(IncomeLedger.pendingTotal(data))
+			Components.setButtonText(
+				collect,
+				if pending > 0 then `COLLECT ${Format.short(pending)}` else "NOTHING TO COLLECT"
+			)
+			Components.setButtonStyle(collect, if pending > 0 then "Gold" else "Gray")
+		end
 	end
 
 	local function refreshCurrency(data: Types.PlayerData)

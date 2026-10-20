@@ -51,7 +51,7 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 | §20 Trading | 0 | 0 | 0 | 1 | 0 |
 | §21 Leaderboards and achievements | 0 | 0 | 1 | 1 | 0 |
 | §22 Events | 0 | 0 | 0 | 1 | 0 |
-| §23 Robux monetization | 1 | 0 | 0 | 4 | 1 |
+| §23 Robux monetization | 1 | 4 | 0 | 0 | 1 |
 | §24–25 UI and audio | 1 | 1 | 3 | 2 | 1 |
 | §26–29 Architecture, security, persistence, performance | 8 | 3 | 3 | 2 | 1 |
 | §30–33 Process, testing, balancing, deliverables | 9 | 0 | 3 | 1 | 2 |
@@ -312,11 +312,11 @@ The prioritised plan that follows from this audit is in [ROADMAP.md](ROADMAP.md)
 
 | Req | Requirement | Status | Evidence / gap |
 | --- | --- | --- | --- |
-| §23.1 | Configurable product ids; never invent real ids; placeholders | ✅ | `Config/Monetization`: every `Id = 0` (disabled) |
-| §23.2 | Developer products via idempotent `ProcessReceipt` with persisted transaction state | ⬜ | `Purchases.Receipts` is reserved; there's no handler |
-| §23.3 | Game Pass ownership verified and benefits applied on the server | ⬜ | — |
-| §23.4 | Store UI (icon, name, description, price, benefits, buy, feedback); free vs paid clearly separated | ⬜ | — |
-| §23.5 | Compliance for paid random items (odds, regional rules) | ⬜ | No paid random items exist yet |
+| §23.1 | Configurable product ids; never invent real ids; placeholders | ✅ | `Config/Monetization`: owner-provided ids only; unknown ones are `0` (disabled, e.g. Open All, Treats) |
+| §23.2 | Developer products via idempotent `ProcessReceipt` with persisted transaction state | 🟡 | `Lib/ReceiptProcessor` + `Purchases.Receipts`, saved before `PurchaseGranted` (unit-tested); not yet run in Studio |
+| §23.3 | Game Pass ownership verified and benefits applied on the server | 🟡 | VIP (+25% income), 2x AFK Time Cash, Multi Opening; unit-tested; VIP name tag not implemented |
+| §23.4 | Store UI (icon, name, description, price, benefits, buy, feedback); free vs paid clearly separated | 🟡 | Premium Shop window (Robux only); Pack Shop stays Cash; not yet checked in Studio |
+| §23.5 | Compliance for paid random items (odds, regional rules) | 🟡 | Robux packs show per-rarity odds and are hidden when `ArePaidRandomItemsRestricted` (or the policy query fails) |
 | §23.6 | Placeholder catalogue follows the suggested products (Cash bundles, boosts, passes) | ❌ | `TreatsSmall` and `TreatsLarge` sell a currency the spec doesn't define. See C9 |
 
 ## §24–25 UI, UX and audio

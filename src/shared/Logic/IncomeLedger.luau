@@ -93,15 +93,21 @@ end
 
 -- Credits capped offline earnings onto the stands, based on the saved LastOnline timestamp
 -- (server time only). Returns (amount added, seconds counted). LastOnline = 0 means the
--- player has never been online, so nothing is awarded.
-function IncomeLedger.applyOffline(data: Types.PlayerData, now: number, extra: number?): (number, number)
+-- player has never been online, so nothing is awarded. `offlineMultiplier` (2x AFK Time
+-- Cash) scales only these offline earnings; the caller applies it exactly once per join.
+function IncomeLedger.applyOffline(
+	data: Types.PlayerData,
+	now: number,
+	extra: number?,
+	offlineMultiplier: number?
+): (number, number)
 	local last = data.Income.LastOnline
 	if last <= 0 or now <= last then
 		return 0, 0
 	end
 	local settings = Config.Economy.Income
 	local seconds = math.min(now - last, settings.OfflineCapSeconds)
-	local added = IncomeLedger.accrue(data, seconds * settings.OfflineRate, extra)
+	local added = IncomeLedger.accrue(data, seconds * settings.OfflineRate, (extra or 1) * (offlineMultiplier or 1))
 	return added, seconds
 end
 

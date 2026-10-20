@@ -53,8 +53,9 @@ describe("Shared card back asset", function()
 		expect(CardArt.image("pack.pack1.front")).toBe("rbxassetid://104453844983670")
 		local ids = CardArt.allContentIds()
 		expect(table.find(ids, "rbxassetid://129297477524368") ~= nil).toBe(true)
-		-- 6 card fronts + pack front + card back + 5 HUD images.
-		expect(#ids).toBe(13)
+		-- 6 card fronts + pack front + card back + 5 HUD images, 3 HUD art pieces (level bar,
+		-- collect button, shop icon), 4 shop pass icons, 11 promo cards + promo wrapper + promo back.
+		expect(#ids).toBe(13 + 3 + 4 + 13)
 	end)
 
 	it("uses a thumbnail only when one is uploaded, else the full image", function()
@@ -102,7 +103,7 @@ describe("Entitlements: unlock prerequisites", function()
 		expect((Entitlements.canPurchase(none, "MultiOpen3"))).toBe(true)
 		local ok6, reason6 = Entitlements.canPurchase(none, "MultiOpen6")
 		expect(ok6).toBe(false)
-		expect(reason6).toBe("Unlock 3x Multi Opening first")
+		expect(reason6).toBe("Unlock Open 3 at Once first")
 		local three = player(0, { "MultiOpen3" })
 		expect((Entitlements.canPurchase(three, "MultiOpen3"))).toBe(false)
 		expect((Entitlements.canPurchase(three, "MultiOpen6"))).toBe(true)
@@ -218,7 +219,7 @@ describe("GamePassOwnership: purchase completion and the 6x prerequisite", funct
 		expect(Entitlements.canUseMode(data, 6)).toBe(false)
 		local kind, message = GamePassOwnership.purchaseMessage(data, product, result)
 		expect(kind).toBe("warning")
-		expect(string.find(message, "activates once you also own 3x Multi Opening", 1, true) ~= nil).toBe(true)
+		expect(string.find(message, "activates once you also own Open 3 at Once", 1, true) ~= nil).toBe(true)
 		expect(string.find(message, "activated!", 1, true)).toBeNil()
 		-- Buying 3x afterwards activates 6x without buying 6x again.
 		GamePassOwnership.apply(data, "MultiOpen3", "owned")

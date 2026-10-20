@@ -9,8 +9,10 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
+local CardArt = require(Shared.Logic.CardArt)
 local CardRegistry = require(Shared.Logic.CardRegistry)
 local Economy = require(Shared.Logic.Economy)
+local Entitlements = require(Shared.Logic.Entitlements)
 local Inventory = require(Shared.Logic.Inventory)
 local RevealStyle = require(Shared.Logic.RevealStyle)
 local Format = require(Shared.Util.Format)
@@ -22,6 +24,7 @@ local Create = require(UI.Create)
 local Theme = require(UI.Theme)
 local Windows = require(UI.Windows)
 local Coalesce = require(script.Parent.Parent.Lib.Coalesce)
+local PackOpening = require(script.Parent.Parent.Lib.PackOpening)
 local Request = require(script.Parent.Parent.Lib.Request)
 local DataController = require(script.Parent.DataController)
 
@@ -36,6 +39,10 @@ local SORTS: { { key: string, label: string } } = {
 }
 
 local DETAIL_WIDTH = 304
+local TAB_W = 104
+local TOOLBAR_SEARCH_W = 200
+local SORT_W = 100
+local CAPACITY_W = 196
 
 local sortKey = "Recent"
 local query = ""
@@ -48,6 +55,14 @@ local grid: ScrollingFrame
 local detail: Frame
 local capacityChip: Frame
 local sortButtons: { [string]: TextButton } = {}
+-- "Cards" or "Packs" (the pack inventory: every bought or granted pack waits here).
+local tab = "Cards"
+local tabButtons: { [string]: TextButton } = {}
+local cardsView: { GuiObject } = {}
+local packsPanel: Frame
+local packsList: ScrollingFrame
+-- Opening size chosen per pack (1, 3 or 6).
+local packModes: { [string]: number } = {}
 
 local function rarityOrder(def: Types.CardDef): number
 	local rarity = Config.Rarities.ById[def.Rarity]
@@ -314,8 +329,136 @@ local function refreshSortButtons()
 	end
 end
 
-local function render()
+local render: () -> ()
+
+local function renderPackRow(data: Types.PlayerData, pack: Types.PackDef, owned: number, order: number)
+	local row = Components.panel({
+		Name = pack.Id,
+		Size = UDim2.new(1, -12, 0, 150),
+		LayoutOrder = order,
+		Parent = packsList,
+	})
+	local art = CardArt.forPack(pack)
+	if art then
+		Create("ImageLabel", {
+			Name = "PackArt",
+			Size = UDim2.fromOffset(84, 126),
+			Position = UDim2.fromOffset(16, 12),
+			BackgroundTransparency = 1,
+			Image = art,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = row,
+		})
+	else
+		local badge = Components.badge(string.sub(pack.DisplayName, 1, 1), pack.Color, UDim2.fromOffset(84, 126))
+		badge.Position = UDim2.fromOffset(16, 12)
+		badge.Parent = row
+	end
+	Components.label({
+		Text = string.upper(pack.DisplayName),
+		Size = UDim2.fromOffset(320, 32),
+		Position = UDim2.fromOffset(116, 12),
+		Color = Theme.Colors.Gold,
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 3,
+		Parent = row,
+	})
+	Components.label({
+		Text = `x{Format.commas(owned)} IN YOUR BAG  |  {pack.CardsPerOpen} CARDS EACH`,
+		Size = UDim2.fromOffset(360, 22),
+		Position = UDim2.fromOffset(116, 48),
+		Color = Theme.Colors.Text,
+		XAlign = Enum.TextXAlignment.Left,
+		StrokeThickness = 2,
+		Parent = row,
+	})
+	-- Opening size: 1 always; 3x / 6x with the Multi Opening passes (locked ones lead to the
+	-- Premium Shop, where the server prompts the game pass).
+	local mode = packModes[pack.Id] or 1
+	if not Entitlements.canUseMode(data, mode) then
+		mode = 1
+	end
+	local options = { 1 }
+	for _, product in Entitlements.products() do
+		table.insert(options, product.Packs :: number)
+	end
+	for i, packs in options do
+		local usable = Entitlements.canUseMode(data, packs)
+		local label = if packs == 1 then "1 PACK" elseif usable then `{packs} PACKS` else `{packs}x LOCKED`
+		Components.button({
+			Text = label,
+			Style = if not usable then "Purple" elseif packs == mode then "Gold" else "Brown",
+			Size = UDim2.fromOffset(136, 40),
+			Position = UDim2.fromOffset(116 + (i - 1) * 144, 92),
+			Parent = row,
+			OnClick = function()
+				if usable then
+					packModes[pack.Id] = packs
+					render()
+				else
+					Windows.open("Shop")
+				end
+			end,
+		})
+	end
+	local canOpen = owned >= mode
+	Components.button({
+		Text = if canOpen then (if mode > 1 then `OPEN {mode}x` else "OPEN") else `NEED {mode} PACKS`,
+		Style = if canOpen then "Gold" else "Gray",
+		Size = UDim2.fromOffset(200, 60),
+		Position = UDim2.new(1, -16, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Parent = row,
+		OnClick = function()
+			if canOpen then
+				PackOpening.open(pack, mode)
+			end
+		end,
+	})
+end
+
+local function renderPacks(data: Types.PlayerData)
+	clear(packsList)
+	local total = 0
+	local order = 0
+	for _, pack in Config.Packs.List do
+		local owned = data.Packs[pack.Id] or 0
+		if owned > 0 then
+			total += owned
+			order += 1
+			renderPackRow(data, pack, owned, order)
+		end
+	end
+	Components.setChipText(capacityChip, `{Format.commas(total)} PACK{if total == 1 then "" else "S"}`)
+	if total == 0 then
+		Components.emptyState(
+			packsList,
+			"NO PACKS IN YOUR BAG",
+			"Packs you buy wait here until you open them.",
+			"BUY PACKS",
+			function()
+				Windows.open("Packs")
+			end
+		)
+	end
+end
+
+render = function()
 	if not Windows.isOpen("Backpack") then
+		return
+	end
+	for name, button in tabButtons do
+		Components.setButtonStyle(button, if name == tab then "Gold" else "Brown")
+	end
+	for _, object in cardsView do
+		object.Visible = tab == "Cards"
+	end
+	packsPanel.Visible = tab == "Packs"
+	if tab == "Packs" then
+		local data = DataController:Get()
+		if data then
+			renderPacks(data)
+		end
 		return
 	end
 	clear(grid)
@@ -359,17 +502,37 @@ function BackpackController:Start()
 	Windows.register("Backpack", {
 		Title = "Backpack",
 		Icon = "ui.icon.backpack",
-		Size = Vector2.new(980, 600),
+		Size = Vector2.new(1000, 600),
 		Build = function(content: Frame)
-			-- Toolbar: search, sort, capacity.
-			Components.searchBox("Search cards...", UDim2.fromOffset(250, 42), content, function(text)
-				query = text
-				render()
-			end)
+			-- Toolbar: CARDS / PACKS tabs, search, sort, capacity.
+			for i, name in { "Cards", "Packs" } do
+				tabButtons[name] = Components.button({
+					Text = string.upper(name),
+					Style = "Brown",
+					Size = UDim2.fromOffset(TAB_W, 42),
+					Position = UDim2.fromOffset((i - 1) * (TAB_W + 6), 0),
+					Parent = content,
+					OnClick = function()
+						tab = name
+						render()
+					end,
+				})
+			end
+			local toolX = 2 * (TAB_W + 6) + 6
+			local search = Components.searchBox(
+				"Search cards...",
+				UDim2.fromOffset(TOOLBAR_SEARCH_W, 42),
+				content,
+				function(text)
+					query = text
+					render()
+				end
+			)
+			search.Position = UDim2.fromOffset(toolX, 0)
 			local sortBar = Create("Frame", {
 				Name = "Sort",
-				Size = UDim2.fromOffset(3 * 118, 42),
-				Position = UDim2.fromOffset(262, 0),
+				Size = UDim2.fromOffset(3 * (SORT_W + 6), 42),
+				Position = UDim2.fromOffset(toolX + TOOLBAR_SEARCH_W + 8, 0),
 				BackgroundTransparency = 1,
 				Parent = content,
 			}, {
@@ -383,7 +546,7 @@ function BackpackController:Start()
 				sortButtons[sort.key] = Components.button({
 					Text = sort.label,
 					Style = "Brown",
-					Size = UDim2.fromOffset(112, 42),
+					Size = UDim2.fromOffset(SORT_W, 42),
 					LayoutOrder = i,
 					Parent = sortBar,
 					OnClick = function()
@@ -395,7 +558,7 @@ function BackpackController:Start()
 			end
 			refreshSortButtons()
 			-- Capacity sits above the details column, clear of the toolbar.
-			capacityChip = Components.chip("0/0", Theme.Colors.BrownDark, UDim2.fromOffset(DETAIL_WIDTH, 38), content)
+			capacityChip = Components.chip("0/0", Theme.Colors.BrownDark, UDim2.fromOffset(CAPACITY_W, 38), content)
 			capacityChip.Position = UDim2.fromScale(1, 0)
 			capacityChip.AnchorPoint = Vector2.new(1, 0)
 
@@ -439,6 +602,29 @@ function BackpackController:Start()
 				Trim = Theme.Colors.Gold,
 				Parent = content,
 			})
+			packsPanel = Components.panel({
+				Name = "PacksPanel",
+				Size = UDim2.new(1, 0, 1, -54),
+				Position = UDim2.fromOffset(0, 54),
+				Parent = content,
+			})
+			packsPanel.Visible = false
+			packsList = Create("ScrollingFrame", {
+				Name = "Packs",
+				Size = UDim2.new(1, -8, 1, -8),
+				Position = UDim2.fromOffset(4, 4),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ScrollBarThickness = 8,
+				ScrollBarImageColor3 = Theme.Colors.Gold,
+				CanvasSize = UDim2.new(),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				Parent = packsPanel,
+			}, {
+				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }),
+				Create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingTop = UDim.new(0, 6) }),
+			})
+			cardsView = { search, sortBar, gridPanel, detail }
 			return render
 		end,
 		OnClose = function()
@@ -449,7 +635,7 @@ function BackpackController:Start()
 	-- Re-render while open when cards or stands change: once per frame, however many of
 	-- these keys arrive together (a pack opening sends several).
 	local scheduleRender = Coalesce(render)
-	for _, key in { "Cards", "Display", "Upgrades" } do
+	for _, key in { "Cards", "Display", "Upgrades", "Packs", "Purchases" } do
 		DataController.Changed:Connect(function(changed)
 			if changed == key or changed == "*" then
 				scheduleRender()
@@ -458,8 +644,16 @@ function BackpackController:Start()
 	end
 end
 
+-- Opens the backpack on the PACKS tab (owned packs, ready to open).
+function BackpackController:OpenPacks()
+	tab = "Packs"
+	targetSlot = nil
+	Windows.open("Backpack")
+end
+
 -- Opens the backpack with a card pre-selected (used by the stands window).
 function BackpackController:OpenWith(instanceId: string?)
+	tab = "Cards"
 	selectedId = instanceId
 	targetSlot = nil
 	Windows.open("Backpack")
@@ -470,6 +664,7 @@ function BackpackController:OpenForStand(slot: number)
 	local data = DataController:Get()
 	selectedId = if data then data.Display[tostring(slot)] else nil
 	targetSlot = slot
+	tab = "Cards"
 	Windows.open("Backpack")
 end
 

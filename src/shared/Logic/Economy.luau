@@ -64,8 +64,32 @@ end
 
 -- Player-wide income multiplier from upgrades and completed collections.
 -- `extra` lets callers fold in server-only sources (game passes, boosts).
+-- Multiplier from owned game passes (VIP), read from the server-verified entitlement cache.
+function Economy.passIncomeMultiplier(data: Types.PlayerData): number
+	local multiplier = 1
+	for key, pass in Config.Monetization.GamePasses :: { [string]: any } do
+		if pass.IncomeMultiplier and data.Purchases.Entitlements[key] == true then
+			multiplier *= pass.IncomeMultiplier
+		end
+	end
+	return multiplier
+end
+
 function Economy.incomeMultiplier(data: Types.PlayerData, extra: number?): number
-	return (1 + Economy.upgradeEffect(data, "IncomeBoost") + Collections.incomeBonus(data)) * (extra or 1)
+	return (1 + Economy.upgradeEffect(data, "IncomeBoost") + Collections.incomeBonus(data))
+		* Economy.passIncomeMultiplier(data)
+		* (extra or 1)
+end
+
+-- Multiplier for earnings credited while the player was away (2x AFK Time Cash).
+function Economy.offlineMultiplier(data: Types.PlayerData): number
+	local multiplier = 1
+	for key, pass in Config.Monetization.GamePasses :: { [string]: any } do
+		if pass.OfflineMultiplier and data.Purchases.Entitlements[key] == true then
+			multiplier *= pass.OfflineMultiplier
+		end
+	end
+	return multiplier
 end
 
 function Economy.displaySlotCount(data: Types.PlayerData): number

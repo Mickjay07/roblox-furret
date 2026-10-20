@@ -1,7 +1,7 @@
 --!strict
--- Multi Opening game passes, as mirrored from Roblox into Purchases.Entitlements by
--- MonetizationService (server only). Pure rules shared by the server (enforcement) and the
--- client (what to show):
+-- Game passes (Multi Opening, VIP, 2x AFK Time Cash, ...), as mirrored from Roblox into
+-- Purchases.Entitlements by MonetizationService (server only). Pure rules shared by the
+-- server (enforcement) and the client (what to show). Multi Opening:
 --   * 1 pack per opening is always available.
 --   * 3x needs the MultiOpen3 pass.
 --   * 6x needs the MultiOpen6 pass AND its prerequisite MultiOpen3. The game only prompts
@@ -14,26 +14,52 @@ export type Product = {
 	Key: string,
 	GamePassId: number,
 	DisplayName: string,
-	Packs: number,
+	Description: string?,
+	Icon: string?,
+	Order: number?,
+	-- Multi Opening only: packs opened together (nil for other passes).
+	Packs: number?,
 	Requires: string?,
 	ExpectedPriceRobux: number?,
 }
 
 local Entitlements = {}
 
-local PRODUCTS = Config.Monetization.MultiOpen :: { [string]: Product }
+-- Multi Opening passes (they define the opening sizes).
+local PRODUCTS = (Config.Monetization.MultiOpen :: any) :: { [string]: Product }
+-- Every game pass by key: Multi Opening plus the other permanent passes.
+-- (table.clone of a frozen table is not frozen, so the other passes can be added.)
+local PASSES: { [string]: Product } = table.clone(PRODUCTS)
+for key, pass in Config.Monetization.GamePasses :: { [string]: any } do
+	PASSES[key] = pass
+end
 
 function Entitlements.product(key: string): Product?
-	return PRODUCTS[key]
+	return PASSES[key]
 end
 
 function Entitlements.productByPassId(gamePassId: number): Product?
-	for _, product in PRODUCTS do
+	if gamePassId <= 0 then
+		return nil
+	end
+	for _, product in PASSES do
 		if product.GamePassId == gamePassId then
 			return product
 		end
 	end
 	return nil
+end
+
+-- Every game pass (configured or not yet created), in shop order.
+function Entitlements.passes(): { Product }
+	local list = {}
+	for _, product in PASSES do
+		table.insert(list, product)
+	end
+	table.sort(list, function(a, b)
+		return (a.Order or 99) < (b.Order or 99)
+	end)
+	return list
 end
 
 -- Passes sorted by pack count (3x, then 6x).
@@ -43,7 +69,7 @@ function Entitlements.products(): { Product }
 		table.insert(list, product)
 	end
 	table.sort(list, function(a, b)
-		return a.Packs < b.Packs
+		return (a.Packs or 0) < (b.Packs or 0)
 	end)
 	return list
 end
@@ -58,7 +84,7 @@ local function usable(data: Types.PlayerData, product: Product): boolean
 		return false
 	end
 	if product.Requires then
-		local required = PRODUCTS[product.Requires]
+		local required = PASSES[product.Requires]
 		return required ~= nil and usable(data, required)
 	end
 	return true
@@ -82,7 +108,7 @@ function Entitlements.modes(data: Types.PlayerData): { number }
 	local modes = { 1 }
 	for _, product in Entitlements.products() do
 		if usable(data, product) then
-			table.insert(modes, product.Packs)
+			table.insert(modes, product.Packs :: number)
 		end
 	end
 	return modes
@@ -90,7 +116,7 @@ end
 
 -- May the game prompt this pass for the player? Returns (ok, reason).
 function Entitlements.canPurchase(data: Types.PlayerData, key: string): (boolean, string?)
-	local product = PRODUCTS[key]
+	local product = PASSES[key]
 	if not product or product.GamePassId <= 0 then
 		return false, "That item isn't available"
 	end
@@ -98,7 +124,7 @@ function Entitlements.canPurchase(data: Types.PlayerData, key: string): (boolean
 		return false, `You already own {product.DisplayName}`
 	end
 	if product.Requires and not Entitlements.owns(data, product.Requires) then
-		local required = PRODUCTS[product.Requires]
+		local required = PASSES[product.Requires]
 		return false, `Unlock {if required then required.DisplayName else product.Requires} first`
 	end
 	return true, nil

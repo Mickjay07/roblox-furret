@@ -48,7 +48,7 @@ function PackService:Start()
 	-- Opening sizes: 1, plus every Multi Opening product's pack count (3, 6).
 	local sizes: { [number]: boolean } = { [1] = true }
 	for _, product in Entitlements.products() do
-		sizes[product.Packs] = true
+		sizes[product.Packs :: number] = true
 	end
 	local openArgs: { Validate.Checker } = { Validate.oneOf(Config.Packs.ById), Validate.id(64), Validate.oneOf(sizes) }
 	Net.onInvoke(

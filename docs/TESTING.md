@@ -289,21 +289,21 @@ The place must be **published** (the passes belong to the experience). In Studio
 purchases are test purchases (no Robux charged). Note that in Studio
 `UserOwnsGamePassAsync` reflects your real account: if you already own a pass, it shows as
 owned.
-- [ ] Server Output at start: `[Monetization] 3x Multi Opening (game pass 2038324873)
+- [ ] Server Output at start: `[Monetization] Open 3 at Once (game pass 2038324873)
       "...": for sale, 100 Robux` and the same line for 6x with **its configured price**.
       A warning `NOT for sale`, `could not be read` or `design says 100` must be fixed on
       the Roblox website; an off-sale pass shows `UNAVAILABLE`.
-- [ ] While the server is still asking Roblox, the buttons read `3x - CHECKING...`, never
-      `UNLOCK` for a pass you own.
-- [ ] Click `UNLOCK 3x  R$100`: the Roblox game pass prompt appears. Buy (test purchase):
-      toast `3x Multi Opening activated!`, the strip shows `3 PACKS`, `6x` becomes
-      `UNLOCK 6x  R$<price>`.
+- [ ] While the server is still asking Roblox, the Shop buttons read `CHECKING...`, never
+      `BUY` for a pass you own.
+- [ ] Shop > `Open 3 at Once` > `BUY  R$100`: the Roblox game pass prompt appears. Buy
+      (test purchase): toast `Open 3 at Once activated!`, the card shows `OWNED`, Backpack >
+      PACKS shows a `3 PACKS` button, and `Open 6 at Once` becomes `BUY  R$<price>`.
 - [ ] Rejoin: 3x is owned again without buying (checked with Roblox on join).
 - [ ] Cancel a purchase prompt: nothing changes.
-- [ ] Before owning 3x, the 6x button reads `6x - NEEDS 3x` and can't prompt; from the
+- [ ] Before owning 3x, the 6x card reads `NEEDS OPEN 3 AT ONCE` and can't prompt; from the
       client command bar,
-      `game.ReplicatedStorage.Remotes.PromptMultiOpen:InvokeServer("MultiOpen6")` returns
-      `Unlock 3x Multi Opening first`.
+      `game.ReplicatedStorage.Remotes.PromptGamePass:InvokeServer("MultiOpen6")` returns
+      `Unlock Open 3 at Once first`.
 - [ ] 6x bought without 3x (e.g. from the experience page on the website), then join: the
       toast says the 6x pass is owned and activates once you also own 3x; 6x stays locked;
       after buying 3x, 6x works without buying it again.
@@ -408,6 +408,68 @@ Use Studio's Device emulator (e.g. 1920×1080, iPhone 14 portrait/landscape, iPa
       pill with a coin **above** the floating card (never hidden behind it), sinks to just
       above the pedestal when the stand is empty, and shrinks with distance.
 
+### 1.19 Upgrade prices (Upgrades window)
+- [ ] Every upgrade's button shows the **full** price of the next level (`$500`, `$5.92M`,
+      `$115M`), never `NEED $X`. The price is rounded **up**, never below the real price.
+- [ ] Unaffordable: the button is grey with the full price, and `Need $X more` is shown
+      **under** it. Example from the report: DEV `setcash 108819342`, Cosy Hammocks at
+      level 21 → button `$115M`, hint `Need $5.92M more`.
+- [ ] Clicking a grey button shows **one** `Not enough Cash. Need $X more` toast; clicking it
+      five times fast still shows one toast (identical toasts are merged for 3 s) and sends no
+      request (Server Output stays quiet).
+- [ ] Exact balance: set cash to exactly the price → green; buying leaves `$0`, the level goes
+      up by one and the next price appears.
+- [ ] Max level: the button reads `MAXED` (gold) with `Max level reached` under it; clicking
+      does nothing. From the command bar,
+      `game.ReplicatedStorage.Remotes.BuyUpgrade:InvokeServer("IncomeBoost")` at max returns
+      `Already at max level` and no cash is taken.
+- [ ] Pack Shop: the BUY button also shows the full price (`BUY $1,500`); unaffordable shows the
+      hint under it, not instead of the price.
+
+### 1.20 Premium Shop (Robux) and game passes
+The place must be **published**; purchases in Studio are test purchases.
+- [ ] HUD right rail has a SHOP icon (art 83544896119835) at the top; it opens the `Shop`
+      window with the shop icon in its ribbon.
+- [ ] Server Output at start: one `[Monetization] ...: for sale, N Robux` line (or a warning)
+      for VIP (2040244736), 2x AFK Time Cash (2038205144), Open 3 (2038324873), Open 6
+      (2039938706) and the three pack products (3720277269 / 3720277334 / 3720277406, with
+      `design says 75/199/499` warnings if the website prices differ).
+- [ ] PERMANENT PASSES: VIP (art 108576806919415), 2x AFK Time Cash (no art: letter badge),
+      Open 3 (137191381736886), Open 6 (120349601099983), Open All (71884954923271) shows
+      `COMING SOON` (no game pass id configured).
+- [ ] Buying VIP: no success toast before Roblox confirms; after the test purchase the toast
+      says `VIP activated!`, the card shows `OWNED`, and the HUD `CASH/S` rises by 25%.
+- [ ] Cancel any prompt: nothing changes, no toast.
+- [ ] Rejoin: VIP / 2x AFK show `OWNED` without buying again.
+- [ ] 2x AFK Time Cash: with stands earning, leave for 2+ minutes, rejoin → the `while you
+      were away` toast says `(2x AFK Time Cash)` and the amount is double what the same
+      absence pays without the pass (compare with a second account). It is credited once:
+      the stands' pending amounts don't jump again a few seconds later.
+- [ ] LIMITED-TIME BUNDLES shows `NO LIMITED OFFERS RIGHT NOW` (none configured).
+
+### 1.21 Robux packs and the pack inventory
+- [ ] Shop > ROBUX PACKS shows 1 / 3 / 10 Packs with their Robux price and an `Odds:` line.
+- [ ] In a region where paid random items are restricted (or when the policy query fails) the
+      buttons read `NOT AVAILABLE HERE`, and `PromptProduct:InvokeServer("Packs1")` returns an
+      error.
+- [ ] Buy `3 Packs` (test purchase): no toast until the server processed the receipt, then
+      `Thanks for buying 3 Packs! 3 packs added to your bag.`; Backpack > PACKS shows 3 more
+      packs immediately; Server Output has no `not processed yet` warning.
+- [ ] Rejoin: the packs are still in the bag. Opening one from Backpack > PACKS plays the
+      reveal and leaves 2.
+- [ ] Cancel the prompt: no packs, no toast.
+- [ ] Cash: Pack Shop > BUY → toast `... added to your bag`, the row's `IN BAG (n)` button goes
+      up and opens Backpack > PACKS; the packs are not left in the shop.
+- [ ] Backpack > PACKS: mode buttons `1 PACK`, `3 PACKS`, `6 PACKS` (locked ones are purple
+      `3x LOCKED` and open the Shop); `OPEN 3x` with fewer than 3 packs reads `NEED 3 PACKS`.
+
+### 1.22 HUD level bar and collect button art
+- [ ] Level: the bar art (129406057306152) with a green fill inside it that grows with XP and
+      `LV n` on top. If the fill isn't inside the bar's track, adjust
+      `Config.Visuals.Hud.LevelBar` (`FillInset*`, `Aspect`, `FillAboveArt`).
+- [ ] Collect: the collect art (128905277992791) with the pending amount beside it
+      (`$1.2K`, or `NOTHING YET` faded); clicking it collects every stand.
+
 ## Part 2: specification features (run when implemented)
 
 ### 2.4 Pack shop extras (§7.3–7.4, roadmap A8)
@@ -440,7 +502,7 @@ Use Studio's Device emulator (e.g. 1920×1080, iPhone 14 portrait/landscape, iPa
 - [ ] A failed trade leaves both inventories unchanged.
 
 ### 2.9 Monetization (§23, roadmap Phase E; needs real product ids in a test experience)
-- [ ] (When Developer Products are added) a purchase grants exactly once, even when Roblox
-      retries `ProcessReceipt` (simulate by yielding or erroring once).
+- [ ] A Developer Product purchase grants exactly once, even when Roblox retries
+      `ProcessReceipt` (simulate by erroring once in a test experience; see 1.21).
 - [ ] Game Pass benefits apply on join and after an in-game purchase.
 - [ ] A client "purchase succeeded" message alone grants nothing.
