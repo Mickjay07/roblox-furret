@@ -301,6 +301,23 @@ function MonetizationService:Start()
 		return { ok = true }
 	end)
 
+	-- RETRY in the Shop after a failed ownership check: asks Roblox again (read-only; the
+	-- answer is applied exactly like the join-time check). One refresh at a time per player.
+	local refreshing: { [Player]: boolean } = {}
+	Net.onInvoke(Remotes.Functions.RefreshGamePasses, {}, function(player: Player)
+		if not DataService:GetData(player) then
+			return { ok = false, error = "Data not loaded" }
+		end
+		if not refreshing[player] then
+			refreshing[player] = true
+			task.spawn(function()
+				refresh(player)
+				refreshing[player] = nil
+			end)
+		end
+		return { ok = true }
+	end)
+
 	local productKeys: { [string]: boolean } = {}
 	for _, product in Products.list() do
 		productKeys[product.Key] = true

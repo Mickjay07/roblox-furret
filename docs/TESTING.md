@@ -490,11 +490,25 @@ The place must be **published**; purchases in Studio are test purchases.
 - [ ] Featured panel: pack art left, a sideways-scrolling row of the pack's cards, the chase
       card highlighted on the right, and three purchase buttons (`1 PACK · R$ 75`,
       `3 PACKS · R$ 199`, `10 PACKS · R$ 499`) with an odds line; nothing overlaps.
-- [ ] No `LIMITED TIME` badge or chip while no limited bundle is configured; the limited
-      section reads `No limited offers right now`.
-- [ ] Passes: five cards in a 3-column grid; each shows icon, name, benefit, a status line
-      and a button inside the card. Owned passes show `OWNED` with `Active`; Open 6 without
-      Open 3 shows `LOCKED` with the reason.
+- [ ] No `LIMITED TIME` badge or chip while no limited bundle is configured. The limited
+      section is a small dark-green panel with the shop icon, `No limited offers right now`
+      and `Check back during special events` (no red border).
+- [ ] Section headers (`PASSES & UPGRADES`, `LIMITED-TIME OFFERS`, `ROBUX PACKS`) have a gold
+      accent bar, a subtitle on the right and a divider; gaps between sections are even.
+- [ ] Pass cards: all the same size; icon in a square well, name, two-line benefit, a small
+      status line, and a compact action at the bottom right:
+      - owned: small green `✓ OWNED` badge, status `Active`;
+      - for sale: `R$ <price>` button;
+      - Open 6 without Open 3: status `Needs Open 3 at Once` and a wide `GET OPEN 3 AT ONCE`
+        button that prompts Open 3 (if you own 6 but not 3: `Owned - activates with ...`);
+      - right after joining: `Checking ownership...` (never OWNED before the check);
+      - check failed (e.g. Studio API access off): status `Couldn't check ownership` and a
+        `RETRY` button; clicking it re-checks and the card updates.
+- [ ] The incomplete second row (2 of 5 passes) is centred, not left-aligned with a hole.
+- [ ] Shrink the window (Device emulator: phone landscape, then portrait): the grid drops to
+      2 then 1 column and the text stays readable instead of shrinking.
+- [ ] The scroll bar sits in its own strip on the right and never covers card borders or
+      text; all content stays inside the gold window border.
 - [ ] Robux packs: three equal cards; `10 PACKS` and `R$ 499` are fully readable.
 - [ ] `COMING SOON: PROMO FERRETS #100-#110` shows the eleven promo card images with their
       numbers (art only).

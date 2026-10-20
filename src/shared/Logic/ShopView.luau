@@ -12,12 +12,18 @@ local PackRoller = require(script.Parent.PackRoller)
 local Products = require(script.Parent.Products)
 
 export type CardState = {
+	-- "owned" | "buy" | "unlock" | "checking" | "retry" | "unavailable" (products: "buy" |
+	-- "unavailable"). The UI draws an OWNED badge, a buy button, an unlock button for the
+	-- prerequisite, a subtle loading label or a retry button from this.
+	Kind: string,
 	Button: string,
-	-- Button palette: "Purple" buy, "Green" owned, "Gray" not actionable.
+	-- Button palette: "Purple" buy / unlock, "Brown" retry, "Gray" not actionable.
 	Style: string,
-	-- One short line under the description ("Active", "Requires ...").
+	-- One short line under the description ("Active", "Needs Open 3 at Once").
 	Status: string,
 	CanBuy: boolean,
+	-- "unlock": the pass key the button prompts instead (the prerequisite).
+	Target: string?,
 }
 
 -- Server facts about this player's game pass check (player attributes).
@@ -28,51 +34,82 @@ export type Info = { Available: boolean, Price: number? }
 local ShopView = {}
 
 local function priceText(info: Info): string
-	return if info.Price then `BUY  R$ {info.Price}` else "BUY"
+	return if info.Price then `R$ {info.Price}` else "BUY"
 end
 
-function ShopView.passState(data: Types.PlayerData, pass: Entitlements.Product, check: PassCheck, info: Info): CardState
+-- `infoOf(key)` gives the published sale info of any pass (used for the prerequisite).
+function ShopView.passState(
+	data: Types.PlayerData,
+	pass: Entitlements.Product,
+	check: PassCheck,
+	infoOf: (string) -> Info
+): CardState
 	if pass.GamePassId <= 0 then
-		return { Button = "UNAVAILABLE", Style = "Gray", Status = "Not on sale yet", CanBuy = false }
-	end
-	if not check.Checked then
-		return { Button = "CHECKING...", Style = "Gray", Status = "Checking with Roblox", CanBuy = false }
-	end
-	if not check.Verified then
-		-- Roblox didn't answer: never claim OWNED or offer a pass the player may own.
 		return {
-			Button = "RETRYING...",
+			Kind = "unavailable",
+			Button = "UNAVAILABLE",
 			Style = "Gray",
-			Status = "Couldn't check ownership - retrying",
+			Status = "Not on sale yet",
 			CanBuy = false,
 		}
 	end
+	if not check.Checked then
+		return {
+			Kind = "checking",
+			Button = "CHECKING...",
+			Style = "Gray",
+			Status = "Checking with Roblox",
+			CanBuy = false,
+		}
+	end
+	if not check.Verified then
+		-- Roblox didn't answer: never claim OWNED or offer a pass the player may own.
+		return { Kind = "retry", Button = "RETRY", Style = "Brown", Status = "Couldn't check ownership", CanBuy = false }
+	end
 	local required = if pass.Requires then Entitlements.product(pass.Requires) else nil
-	local requiredName = if required then required.DisplayName else (pass.Requires or "")
 	local hasRequired = pass.Requires == nil or Entitlements.owns(data, pass.Requires)
-	if Entitlements.owns(data, pass.Key) then
-		if not hasRequired then
-			return {
-				Button = "LOCKED",
-				Style = "Gray",
-				Status = `Owned - activates with {requiredName}`,
-				CanBuy = false,
-			}
-		end
-		return { Button = "OWNED", Style = "Green", Status = "Active", CanBuy = false }
+	local owned = Entitlements.owns(data, pass.Key)
+	if not hasRequired and required then
+		-- Prerequisite missing: offer the prerequisite itself (if it can be bought now).
+		local status = if owned then `Owned - activates with {required.DisplayName}` else `Needs {required.DisplayName}`
+		local requiredInfo = infoOf(required.Key)
+		local canUnlock = required.GamePassId > 0 and requiredInfo.Available
+		return {
+			Kind = if canUnlock then "unlock" else "unavailable",
+			Button = if canUnlock then `GET {string.upper(required.DisplayName)}` else "LOCKED",
+			Style = if canUnlock then "Purple" else "Gray",
+			Status = status,
+			CanBuy = false,
+			Target = if canUnlock then required.Key else nil,
+		}
 	end
-	if not hasRequired then
-		return { Button = "LOCKED", Style = "Gray", Status = `Requires {requiredName} first`, CanBuy = false }
+	if owned then
+		return { Kind = "owned", Button = "OWNED", Style = "Green", Status = "Active", CanBuy = false }
 	end
+	local info = infoOf(pass.Key)
 	if not info.Available then
-		return { Button = "UNAVAILABLE", Style = "Gray", Status = "Not for sale right now", CanBuy = false }
+		return {
+			Kind = "unavailable",
+			Button = "UNAVAILABLE",
+			Style = "Gray",
+			Status = "Not for sale right now",
+			CanBuy = false,
+		}
 	end
-	return { Button = priceText(info), Style = "Purple", Status = "Permanent - yours forever", CanBuy = true }
+	return {
+		Kind = "buy",
+		Button = priceText(info),
+		Style = "Purple",
+		Status = "Permanent - yours forever",
+		CanBuy = true,
+		Target = pass.Key,
+	}
 end
 
 function ShopView.productState(product: Products.Product, restricted: boolean, info: Info, now: number): CardState
 	if Products.isPaidRandom(product) and restricted then
 		return {
+			Kind = "unavailable",
 			Button = "NOT AVAILABLE HERE",
 			Style = "Gray",
 			Status = "Robux packs aren't sold in your region",
@@ -80,9 +117,16 @@ function ShopView.productState(product: Products.Product, restricted: boolean, i
 		}
 	end
 	if not info.Available or not Products.isOnSale(product, now) then
-		return { Button = "UNAVAILABLE", Style = "Gray", Status = "Not for sale right now", CanBuy = false }
+		return {
+			Kind = "unavailable",
+			Button = "UNAVAILABLE",
+			Style = "Gray",
+			Status = "Not for sale right now",
+			CanBuy = false,
+		}
 	end
 	return {
+		Kind = "buy",
 		Button = if info.Price then `R$ {info.Price}` else "BUY",
 		Style = "Purple",
 		Status = "Goes straight to your bag",

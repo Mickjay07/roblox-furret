@@ -3,6 +3,35 @@
 Newest entries first. Each entry records what changed, how it was verified, and where that
 verification ran (CI, cloud, or a local Studio session).
 
+## 2026-10-20: Exclusive Shop polish: Passes & Upgrades and Limited-Time Offers
+
+- **Inputs:** no screenshot was attached, so this works from the written description.
+- **Pass cards:**
+  - Same size everywhere: square icon well, name, two-line benefit, a small status line and
+    a compact action at the bottom right.
+  - States come from `ShopView.passState`, which gains `Kind` and `Target`:
+    - owned: a small `✓ OWNED` badge, only from server-verified data;
+    - for sale: an `R$ <price>` button;
+    - missing prerequisite: `Needs Open 3 at Once` plus a `GET OPEN 3 AT ONCE` button that
+      prompts the prerequisite pass;
+    - checking: a subtle "Checking ownership..." label;
+    - check failed: a `RETRY` button through the new `RefreshGamePasses` remote, which
+      re-asks Roblox with the same logic as the join check.
+- **Layout:**
+  - Descriptions use fixed text sizes (not TextScaled), never smaller than 13 on-screen px.
+  - `UiLayout.gridColumns` drops from 3 to 2 to 1 columns when the window is scaled down.
+  - Grids are centred, so the 2-card last row is balanced.
+  - The scroll bar has its own inset column, away from the cards.
+- **Limited-time offers:**
+  - No offers: a compact neutral panel with the shop icon, "No limited offers right now"
+    and "Check back during special events" (the red error-like panel is gone).
+  - Real offers: art, name, reward summary, time left only with a real `EndsAt`, a price
+    button for the configured product, and a `LIMITED TIME` badge only while it is on sale.
+- **Section headers:** gold accent bar, subtitle and divider; tighter, even spacing.
+- **Unchanged:** prices, pass ids, product ids and pack contents.
+- **Verification:** `./scripts/check.sh` passed (340 tests). Not checked in Roblox Studio;
+  see docs/TESTING.md §1.24.
+
 ## 2026-10-20: Open All, Premium Shop redesign, Promo Ferret pack, responsive HUD
 
 - **Inputs:** the screenshots mentioned in the request were not attached to the

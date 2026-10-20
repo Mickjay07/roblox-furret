@@ -26,6 +26,9 @@ local Remotes = {
 		-- (productKey) asks the server to prompt a Developer Product. Nothing is granted here:
 		-- products are granted only in ProcessReceipt, after Roblox charged the player.
 		PromptProduct = "PromptProduct",
+		-- () asks the server to re-check game pass ownership with Roblox (Shop RETRY after a
+		-- failed check). The result arrives through Purchases and the GamePasses* attributes.
+		RefreshGamePasses = "RefreshGamePasses",
 		-- (slot) collects one stand's earnings; slot 0 collects every stand -> { collected }
 		CollectEarnings = "CollectEarnings",
 		-- () moves your character to your own plot

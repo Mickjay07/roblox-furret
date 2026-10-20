@@ -27,6 +27,7 @@ local CardRegistry = require(Shared.Logic.CardRegistry)
 local Entitlements = require(Shared.Logic.Entitlements)
 local Products = require(Shared.Logic.Products)
 local ShopView = require(Shared.Logic.ShopView)
+local UiLayout = require(Shared.Logic.UiLayout)
 local Format = require(Shared.Util.Format)
 
 local UI = script.Parent.Parent.UI
@@ -43,18 +44,29 @@ local DataController = require(script.Parent.DataController)
 local PremiumShopController = {}
 
 local WINDOW = Vector2.new(1100, 700)
--- Content is WINDOW.X - 32 wide; the list keeps 20 px for padding and the scroll bar.
-local INNER_W = WINDOW.X - 32 - 20
+-- Content is WINDOW.X - 32 wide. The list's scroll bar sits in its own inset column
+-- (SCROLL_BAR) and the cards keep LIST_PAD from both edges, so the bar never touches them.
+local CONTENT_W = WINDOW.X - 32
+local SCROLL_BAR = 8
+local LIST_PAD = 6
+local INNER_W = CONTENT_W - SCROLL_BAR - 2 * LIST_PAD
 local GRID_GAP = 12
 local COLUMN_W = math.floor((INNER_W - 2 * GRID_GAP) / 3)
-local PASS_H = 176
 local PACK_CARD_H = 300
+-- Smallest on-screen text (px) and card width (px) before the grid drops a column.
+local MIN_SCREEN_TEXT = 13
+local MIN_CARD_PX = 260
 local FEATURED_H = 318
 local PREVIEW_W, PREVIEW_H = 112, 168
 local LIMITED_COLOR = Color3.fromRGB(214, 64, 84)
 
 local list: ScrollingFrame
 local limitedChip: Frame
+-- Set in Start: re-renders once per frame.
+local requestRender: () -> () = function() end
+-- Text size of the last render, to re-render only when the window scale changes it.
+local renderedBody = 0
+local lastColumns = 0
 
 local function clear(container: Instance)
 	for _, child in container:GetChildren() do
@@ -88,22 +100,145 @@ local function now(): number
 	return workspace:GetServerTimeNow()
 end
 
-local function sectionTitle(text: string, order: number)
-	Components.sectionTitle(text, UDim2.new(1, -8, 0, 32), list, order)
+-- Text and card metrics for the current window scale. Text never drops below
+-- MIN_SCREEN_TEXT on-screen pixels: when the window is scaled down, text sizes grow in
+-- layout units and the grid uses fewer columns (UiLayout.gridColumns) instead.
+type Metrics = {
+	scale: number,
+	columns: number,
+	cardW: number,
+	body: number,
+	title: number,
+	small: number,
+	pad: number,
+	icon: number,
+	action: number,
+	passH: number,
+}
+
+local function metrics(): Metrics
+	local width = list.AbsoluteSize.X
+	local scale = if width > 0 then math.max(0.25, width / CONTENT_W) else 1
+	local body = math.max(16, math.ceil(MIN_SCREEN_TEXT / scale))
+	local title = body + 6
+	local small = math.max(14, body - 2)
+	local pad = 14
+	local icon = math.max(72, math.floor(body * 4.2))
+	local action = math.max(40, math.floor(body * 2.4))
+	local columns = UiLayout.gridColumns(INNER_W * scale, MIN_CARD_PX, GRID_GAP * scale, 3)
+	local cardW = math.floor((INNER_W - (columns - 1) * GRID_GAP) / columns)
+	-- Title, two lines of description and the status line, next to the icon.
+	local textH = math.ceil(title * 1.25) + 4 + math.ceil(body * 1.3) * 2 + 4 + math.ceil(small * 1.4)
+	local passH = pad + math.max(icon, textH) + 10 + action + pad
+	return {
+		scale = scale,
+		columns = columns,
+		cardW = cardW,
+		body = body,
+		title = title,
+		small = small,
+		pad = pad,
+		icon = icon,
+		action = action,
+		passH = passH,
+	}
 end
 
-local function grid(name: string, order: number, cellHeight: number): Frame
+-- Fixed-size text (not TextScaled), so descriptions stay readable at every column count.
+local function text(props: {
+	Text: string,
+	Size: UDim2,
+	Position: UDim2,
+	TextSize: number,
+	Color: Color3?,
+	XAlign: Enum.TextXAlignment?,
+	Wrap: boolean?,
+	Parent: Instance,
+	AnchorPoint: Vector2?,
+}): TextLabel
+	local label = Components.label({
+		Text = props.Text,
+		Size = props.Size,
+		Position = props.Position,
+		AnchorPoint = props.AnchorPoint,
+		Color = props.Color,
+		XAlign = props.XAlign or Enum.TextXAlignment.Left,
+		StrokeThickness = 1.5,
+		Parent = props.Parent,
+	})
+	label.TextScaled = false
+	label.TextSize = props.TextSize
+	label.TextWrapped = props.Wrap == true
+	label.TextTruncate = if props.Wrap then Enum.TextTruncate.None else Enum.TextTruncate.AtEnd
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	return label
+end
+
+-- Section header: gold accent bar, title, a muted subtitle and a thin divider.
+local function header(title: string, subtitle: string, order: number, m: Metrics): Frame
+	local height = math.ceil(m.title * 1.3) + 14
+	local frame = Create("Frame", {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = list,
+	})
+	Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(0, 6, 1, -14),
+		Position = UDim2.fromOffset(0, 4),
+		BackgroundColor3 = Theme.Colors.Gold,
+		BorderSizePixel = 0,
+		Parent = frame,
+	}, { Components.corner(UDim.new(1, 0)) })
+	local titleLabel = text({
+		Text = title,
+		Size = UDim2.new(0.5, 0, 0, math.ceil(m.title * 1.25)),
+		Position = UDim2.fromOffset(16, 2),
+		TextSize = m.title,
+		Color = Theme.Colors.Gold,
+		Parent = frame,
+	})
+	titleLabel.AutomaticSize = Enum.AutomaticSize.X
+	titleLabel.Size = UDim2.fromOffset(0, math.ceil(m.title * 1.25))
+	text({
+		Text = subtitle,
+		Size = UDim2.new(0.5, -16, 0, math.ceil(m.small * 1.3)),
+		Position = UDim2.new(1, 0, 0, 2 + math.ceil((m.title - m.small) * 0.6)),
+		AnchorPoint = Vector2.new(1, 0),
+		TextSize = m.small,
+		Color = Theme.Colors.Muted,
+		XAlign = Enum.TextXAlignment.Right,
+		Parent = frame,
+	})
+	Create("Frame", {
+		Name = "Divider",
+		Size = UDim2.new(1, -16, 0, 2),
+		Position = UDim2.new(0, 16, 1, -4),
+		BackgroundColor3 = Theme.Colors.GoldDark,
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		Parent = frame,
+	})
+	return frame
+end
+
+-- A centred grid: an incomplete last row (e.g. 2 of 3 cards) sits in the middle instead of
+-- leaving a hole on the right.
+local function grid(name: string, order: number, cellW: number, cellH: number): Frame
 	return Create("Frame", {
 		Name = name,
-		Size = UDim2.new(1, -8, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
 		Parent = list,
 	}, {
 		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(COLUMN_W, cellHeight),
+			CellSize = UDim2.fromOffset(cellW, cellH),
 			CellPadding = UDim2.fromOffset(GRID_GAP, GRID_GAP),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -159,7 +294,7 @@ local function featured(data: Types.PlayerData, order: number)
 	local limited = ShopView.activeLimited(now())
 	local panel = Components.panel({
 		Name = "Featured",
-		Size = UDim2.new(1, -8, 0, FEATURED_H),
+		Size = UDim2.new(1, 0, 0, FEATURED_H),
 		LayoutOrder = order,
 		Color = Theme.Colors.PanelDeep,
 		Trim = Theme.Colors.Gold,
@@ -257,7 +392,7 @@ local function featured(data: Types.PlayerData, order: number)
 	local cards, chase, oneIn = ShopView.preview(pack)
 	local chaseW = 140
 	local left = 16 + 130 + 16
-	local rowW = INNER_W - 8 - left - 16 - buyW - 16 - chaseW - 12
+	local rowW = INNER_W - left - 16 - buyW - 16 - chaseW - 12
 	local row = Create("ScrollingFrame", {
 		Name = "Preview",
 		Size = UDim2.fromOffset(rowW, PREVIEW_H + 46),
@@ -317,127 +452,240 @@ end
 
 -- 2. Passes -------------------------------------------------------------------------
 
-local function passCard(parent: Instance, data: Types.PlayerData, pass: Entitlements.Product, order: number)
-	local state = ShopView.passState(data, pass, passCheck(), info(pass.Key))
+-- Compact pill, e.g. the green OWNED badge.
+local function pill(parent: Instance, label: string, color: Color3, size: UDim2, position: UDim2, textSize: number)
+	local chip = Create("Frame", {
+		Name = "Badge",
+		Size = size,
+		Position = position,
+		AnchorPoint = Vector2.new(1, 1),
+		BackgroundColor3 = color,
+		Parent = parent,
+	}, { Components.corner(UDim.new(1, 0)), Components.stroke(color:Lerp(Color3.new(0, 0, 0), 0.5), 2) })
+	text({
+		Text = label,
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0, 0),
+		TextSize = textSize,
+		XAlign = Enum.TextXAlignment.Center,
+		Parent = chip,
+	}).TextYAlignment =
+		Enum.TextYAlignment.Center
+	return chip
+end
+
+local function passCard(parent: Instance, data: Types.PlayerData, pass: Entitlements.Product, order: number, m: Metrics)
+	local state = ShopView.passState(data, pass, passCheck(), info)
+	local owned = state.Kind == "owned"
 	local card = Components.panel({
 		Name = pass.Key,
 		LayoutOrder = order,
-		Trim = if state.Button == "OWNED" then Theme.Colors.Leaf else nil,
+		Color = Theme.Colors.PanelInset,
+		Trim = if owned then Theme.Colors.Leaf else Theme.Colors.GoldDark,
 		Parent = parent,
 	})
-	if not art(card, pass.Icon, UDim2.fromOffset(84, 84), UDim2.fromOffset(12, 12)) then
-		local badge = Components.badge(string.sub(pass.DisplayName, 1, 2), Theme.Colors.Leaf, UDim2.fromOffset(84, 84))
-		badge.Position = UDim2.fromOffset(12, 12)
-		badge.Parent = card
+	local p = m.pad
+	-- Icon area: a fixed square well, the art fitted inside it (same size for every pass).
+	local well = Create("Frame", {
+		Name = "IconWell",
+		Size = UDim2.fromOffset(m.icon, m.icon),
+		Position = UDim2.fromOffset(p, p),
+		BackgroundColor3 = Theme.Colors.PanelDeep,
+		Parent = card,
+	}, { Components.corner(UDim.new(0, 12)), Components.stroke(Theme.Colors.GoldDark, 1.5) })
+	if not art(well, pass.Icon, UDim2.new(1, -8, 1, -8), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5)) then
+		local badge = Components.badge(string.sub(pass.DisplayName, 1, 2), Theme.Colors.Leaf, UDim2.new(1, -12, 1, -12))
+		badge.Position = UDim2.fromScale(0.5, 0.5)
+		badge.AnchorPoint = Vector2.new(0.5, 0.5)
+		badge.Parent = well
 	end
-	Components.label({
+
+	local textX = p + m.icon + 12
+	local textW = m.cardW - textX - p
+	local y = p
+	local titleH = math.ceil(m.title * 1.25)
+	text({
 		Text = string.upper(pass.DisplayName),
-		Size = UDim2.new(1, -120, 0, 28),
-		Position = UDim2.fromOffset(106, 10),
+		Size = UDim2.fromOffset(textW, titleH),
+		Position = UDim2.fromOffset(textX, y),
+		TextSize = m.title,
 		Color = Theme.Colors.Gold,
-		XAlign = Enum.TextXAlignment.Left,
-		StrokeThickness = 2.5,
 		Parent = card,
 	})
-	wrapped({
+	y += titleH + 4
+	local descH = math.ceil(m.body * 1.3) * 2
+	text({
 		Text = pass.Description or "",
-		Size = UDim2.new(1, -120, 0, 40),
-		Position = UDim2.fromOffset(106, 40),
+		Size = UDim2.fromOffset(textW, descH),
+		Position = UDim2.fromOffset(textX, y),
+		TextSize = m.body,
 		Color = Theme.Colors.Text,
-		XAlign = Enum.TextXAlignment.Left,
-		StrokeThickness = 1.5,
+		Wrap = true,
 		Parent = card,
 	})
-	Components.label({
+	y += descH + 4
+	text({
 		Text = state.Status,
-		Size = UDim2.new(1, -120, 0, 18),
-		Position = UDim2.fromOffset(106, 82),
-		Color = if state.Button == "OWNED" then Theme.Colors.Cash else Theme.Colors.Muted,
-		XAlign = Enum.TextXAlignment.Left,
-		StrokeThickness = 1.5,
+		Size = UDim2.fromOffset(textW, math.ceil(m.small * 1.4)),
+		Position = UDim2.fromOffset(textX, y),
+		TextSize = m.small,
+		Color = if owned then Theme.Colors.Cash else Theme.Colors.Muted,
 		Parent = card,
 	})
-	buyButton(card, state, UDim2.new(1, -24, 0, 50), UDim2.new(0.5, 0, 1, -12), function()
-		Request(Remotes.Functions.PromptGamePass, pass.Key)
-	end)
+
+	-- Compact action area along the bottom edge.
+	local bottom = UDim2.new(1, -p, 1, -p)
+	if owned then
+		pill(
+			card,
+			"✓ OWNED",
+			Theme.Buttons.Green[2],
+			UDim2.fromOffset(math.floor(m.body * 7), m.action - 6),
+			bottom,
+			m.body
+		)
+	elseif state.Kind == "checking" then
+		text({
+			Text = "Checking ownership...",
+			Size = UDim2.fromOffset(m.cardW - 2 * p, m.action),
+			Position = UDim2.new(0, p, 1, -p - m.action + math.floor((m.action - m.body) / 2)),
+			TextSize = m.body,
+			Color = Theme.Colors.Muted,
+			XAlign = Enum.TextXAlignment.Right,
+			Parent = card,
+		})
+	elseif state.Kind == "unavailable" then
+		pill(
+			card,
+			state.Button,
+			Theme.Buttons.Gray[2],
+			UDim2.fromOffset(math.floor(m.body * 8.5), m.action - 6),
+			bottom,
+			m.small
+		)
+	else
+		-- buy: price button; unlock: wide button for the prerequisite; retry: re-check.
+		local wide = state.Kind == "unlock"
+		local width = if wide then m.cardW - 2 * p else math.max(math.floor(m.cardW * 0.46), math.floor(m.body * 7))
+		local button = Components.button({
+			Text = state.Button,
+			Style = state.Style,
+			Size = UDim2.fromOffset(width, m.action),
+			Position = bottom,
+			AnchorPoint = Vector2.new(1, 1),
+			Parent = card,
+			OnClick = function()
+				if state.Kind == "retry" then
+					Request(Remotes.Functions.RefreshGamePasses)
+				elseif state.Target then
+					-- The server re-checks prerequisites and ownership before prompting.
+					Request(Remotes.Functions.PromptGamePass, state.Target)
+				end
+			end,
+		})
+		button.Name = "Action"
+	end
 end
 
 -- 3. Limited-time offers ------------------------------------------------------------
 
-local function limitedSection(data: Types.PlayerData, order: number)
+local function limitedSection(data: Types.PlayerData, order: number, m: Metrics)
 	local offers = ShopView.activeLimited(now())
-	local panel = Components.panel({
-		Name = "Limited",
-		Size = UDim2.new(1, -8, 0, if #offers == 0 then 96 else PACK_CARD_H + 60),
-		LayoutOrder = order,
-		Color = Color3.fromRGB(70, 18, 30),
-		Trim = LIMITED_COLOR,
-		Parent = list,
-	})
-	Components.label({
-		Text = "LIMITED-TIME OFFERS",
-		Size = UDim2.new(0.6, 0, 0, 30),
-		Position = UDim2.fromOffset(16, 10),
-		Color = Theme.Colors.GoldLight,
-		XAlign = Enum.TextXAlignment.Left,
-		StrokeThickness = 3,
-		Parent = panel,
-	})
+	local head = header("LIMITED-TIME OFFERS", if #offers > 0 then "Robux only" else "", order, m)
+	if #offers > 0 then
+		-- Only while an offer is actually on sale.
+		local badge = Components.chip("LIMITED TIME", LIMITED_COLOR, UDim2.fromOffset(150, 26), head)
+		badge.Position = UDim2.new(0.5, 0, 0, 2)
+	end
 	if #offers == 0 then
-		Components.label({
-			Text = "No limited offers right now - check back during events!",
-			Size = UDim2.new(1, -32, 0, 24),
-			Position = UDim2.fromOffset(16, 52),
+		-- Calm, compact empty state in the shop's own colours.
+		local height = math.max(72, math.ceil(m.body * 1.3) + math.ceil(m.small * 1.4) + 36)
+		local panel = Components.panel({
+			Name = "LimitedEmpty",
+			Size = UDim2.new(1, 0, 0, height),
+			LayoutOrder = order + 1,
+			Color = Theme.Colors.PanelInset,
+			Trim = Theme.Colors.GoldDark,
+			Parent = list,
+		})
+		local iconSize = height - 24
+		if
+			not art(
+				panel,
+				"ui.icon.shop",
+				UDim2.fromOffset(iconSize, iconSize),
+				UDim2.new(0, 14, 0.5, 0),
+				Vector2.new(0, 0.5)
+			)
+		then
+			local badge = Components.badge("!", Theme.Colors.GoldDark, UDim2.fromOffset(iconSize, iconSize))
+			badge.Position = UDim2.new(0, 14, 0.5, 0)
+			badge.AnchorPoint = Vector2.new(0, 0.5)
+			badge.Parent = panel
+		end
+		local x = 14 + iconSize + 14
+		text({
+			Text = "No limited offers right now",
+			Size = UDim2.new(1, -x - 14, 0, math.ceil(m.body * 1.3)),
+			Position = UDim2.new(0, x, 0.5, -math.ceil(m.body * 1.3) - 1),
+			TextSize = m.body + 2,
+			Color = Theme.Colors.Text,
+			Parent = panel,
+		})
+		text({
+			Text = "Check back during special events",
+			Size = UDim2.new(1, -x - 14, 0, math.ceil(m.small * 1.4)),
+			Position = UDim2.new(0, x, 0.5, 3),
+			TextSize = m.small,
 			Color = Theme.Colors.Muted,
-			XAlign = Enum.TextXAlignment.Left,
-			StrokeThickness = 1.5,
 			Parent = panel,
 		})
 		return
 	end
-	local row = Create("Frame", {
-		Name = "Offers",
-		Size = UDim2.new(1, -24, 0, PACK_CARD_H),
-		Position = UDim2.fromOffset(12, 50),
-		BackgroundTransparency = 1,
-		Parent = panel,
-	}, {
-		Create("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, GRID_GAP),
-		}),
-	})
+	local offerH = 300
+	local offerGrid = grid("LimitedOffers", order + 1, m.cardW, offerH)
 	for i, product in offers do
 		local state = ShopView.productState(product, restricted(), info(product.Key), now())
 		local card = Components.panel({
 			Name = product.Key,
-			Size = UDim2.fromOffset(COLUMN_W - 8, PACK_CARD_H),
 			LayoutOrder = i,
-			Color = Theme.Colors.PanelDeep,
-			Trim = LIMITED_COLOR,
-			Parent = row,
+			Color = Theme.Colors.PanelInset,
+			Trim = Theme.Colors.Gold,
+			Parent = offerGrid,
 		})
-		art(card, product.Icon, UDim2.fromOffset(110, 110), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
-		Components.label({
+		art(card, product.Icon, UDim2.fromOffset(110, 110), UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0))
+		local tag = Components.chip("LIMITED TIME", LIMITED_COLOR, UDim2.fromOffset(130, 24), card)
+		tag.Position = UDim2.fromOffset(10, 10)
+		local y = 132
+		text({
 			Text = string.upper(product.DisplayName),
-			Size = UDim2.new(1, -24, 0, 28),
-			Position = UDim2.fromOffset(12, 128),
+			Size = UDim2.new(1, -28, 0, math.ceil(m.title * 1.25)),
+			Position = UDim2.fromOffset(14, y),
+			TextSize = m.title,
 			Color = Theme.Colors.Gold,
-			StrokeThickness = 2.5,
+			XAlign = Enum.TextXAlignment.Center,
 			Parent = card,
 		})
-		local ends = if product.EndsAt then `Ends in {Format.duration(math.max(0, product.EndsAt - now()))}` else ""
-		local odds = if Products.isPaidRandom(product) then `\nOdds: {Products.oddsText(data, product)}` else ""
-		wrapped({
-			Text = `{product.Description or ""}\n{ends}{odds}`,
-			Size = UDim2.new(1, -24, 0, 70),
-			Position = UDim2.fromOffset(12, 160),
+		y += math.ceil(m.title * 1.25) + 4
+		-- Reward summary from the configured grants; time left only with a real end time.
+		local lines = { Products.describe(product) }
+		if product.EndsAt then
+			table.insert(lines, `Ends in {Format.duration(math.max(0, product.EndsAt - now()))}`)
+		end
+		if Products.isPaidRandom(product) then
+			table.insert(lines, `Odds: {Products.oddsText(data, product)}`)
+		end
+		text({
+			Text = table.concat(lines, "\n"),
+			Size = UDim2.new(1, -28, 1, -y - m.action - 24),
+			Position = UDim2.fromOffset(14, y),
+			TextSize = m.small,
 			Color = Theme.Colors.Text,
-			StrokeThickness = 1.5,
+			XAlign = Enum.TextXAlignment.Center,
+			Wrap = true,
 			Parent = card,
 		})
-		buyButton(card, state, UDim2.new(1, -24, 0, 52), UDim2.new(0.5, 0, 1, -12), function()
+		buyButton(card, state, UDim2.new(1, -28, 0, m.action), UDim2.new(0.5, 0, 1, -14), function()
 			Request(Remotes.Functions.PromptProduct, product.Key)
 		end)
 	end
@@ -493,7 +741,7 @@ local function promoTeaser(order: number)
 	end
 	local panel = Components.panel({
 		Name = "PromoTeaser",
-		Size = UDim2.new(1, -8, 0, 236),
+		Size = UDim2.new(1, 0, 0, 236),
 		LayoutOrder = order,
 		Color = Theme.Colors.PanelDeep,
 		Trim = promo.Color,
@@ -568,15 +816,18 @@ local function render()
 		)
 	end
 
+	local m = metrics()
+	renderedBody = m.body
+	lastColumns = m.columns
 	featured(data, 1)
-	sectionTitle("PASSES & UPGRADES", 10)
-	local passes = grid("Passes", 11, PASS_H)
+	header("PASSES & UPGRADES", "Permanent - bought once, yours forever", 10, m)
+	local passes = grid("Passes", 11, m.cardW, m.passH)
 	for i, pass in Entitlements.passes() do
-		passCard(passes, data, pass, i)
+		passCard(passes, data, pass, i, m)
 	end
-	limitedSection(data, 20)
-	sectionTitle("ROBUX PACKS  -  STRAIGHT TO YOUR BAG", 30)
-	local packs = grid("RobuxPacks", 31, PACK_CARD_H)
+	limitedSection(data, 20, m)
+	header("ROBUX PACKS", "Straight to your bag", 30, m)
+	local packs = grid("RobuxPacks", 31, COLUMN_W, PACK_CARD_H)
 	for i, product in Products.list("Packs") do
 		packCard(packs, product, i)
 	end
@@ -600,20 +851,30 @@ function PremiumShopController:Start()
 				Position = UDim2.fromOffset(0, 38),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
-				ScrollBarThickness = 8,
+				ScrollBarThickness = SCROLL_BAR,
 				ScrollBarImageColor3 = Theme.Colors.Gold,
+				-- The bar gets its own column, so it never overlaps card borders or text.
+				VerticalScrollBarInset = Enum.ScrollBarInset.Always,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
 				CanvasSize = UDim2.new(),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				Parent = content,
 			}, {
-				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12) }),
+				Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }),
 				Create("UIPadding", {
-					PaddingLeft = UDim.new(0, 6),
+					PaddingLeft = UDim.new(0, LIST_PAD),
+					PaddingRight = UDim.new(0, LIST_PAD),
 					PaddingTop = UDim.new(0, 4),
-					PaddingBottom = UDim.new(0, 16),
+					PaddingBottom = UDim.new(0, 14),
 				}),
 			})
+			-- Window scale changes (resize, rotate) change text sizes and the column count.
+			list:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				local m = metrics()
+				if m.body ~= renderedBody or m.columns ~= lastColumns then
+					requestRender()
+				end
+			end)
 			Components.label({
 				Text = "Robux purchases are confirmed by Roblox before anything is unlocked.",
 				Size = UDim2.new(1, -350, 0, 24),
@@ -627,6 +888,7 @@ function PremiumShopController:Start()
 		end,
 	})
 	local scheduleRender = Coalesce(render)
+
 	DataController.Changed:Connect(function(changed)
 		if changed == "Purchases" or changed == "Upgrades" or changed == "Progression" or changed == "*" then
 			scheduleRender()
@@ -636,6 +898,7 @@ function PremiumShopController:Start()
 		localPlayer():GetAttributeChangedSignal(attribute):Connect(scheduleRender)
 	end
 	PackOpening.onProductInfo(scheduleRender)
+	requestRender = scheduleRender
 end
 
 return PremiumShopController

@@ -14,6 +14,14 @@ function UiLayout.fitScale(viewport: Vector2, size: Vector2, baseScale: number, 
 	return math.max(0.3, math.min(baseScale, fitX, fitY))
 end
 
+-- How many grid columns fit: as many cards of at least `minCard` on-screen pixels as the
+-- width allows (between 1 and `maxColumns`), so small screens get fewer, readable columns
+-- instead of smaller text.
+function UiLayout.gridColumns(availablePx: number, minCard: number, gap: number, maxColumns: number): number
+	local columns = math.floor((availablePx + gap) / (minCard + gap))
+	return math.clamp(columns, 1, maxColumns)
+end
+
 export type HudPlacement = {
 	-- Offset from the top (px) and the anchor/scale-Y used for the stats panel and right rail.
 	StatsY: number,

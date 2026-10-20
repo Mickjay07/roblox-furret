@@ -33,6 +33,7 @@ return table.freeze({
 		OpenAllPacks = table.freeze({ Rate = 0.5, Burst = 2 }),
 		PromptGamePass = table.freeze({ Rate = 0.5, Burst = 2 }),
 		PromptProduct = table.freeze({ Rate = 0.5, Burst = 2 }),
+		RefreshGamePasses = table.freeze({ Rate = 0.1, Burst = 1 }),
 		CollectEarnings = table.freeze({ Rate = 8, Burst = 16 }),
 		SellCards = table.freeze({ Rate = 2, Burst = 4 }),
 		PlaceCard = table.freeze({ Rate = 6, Burst = 12 }),
